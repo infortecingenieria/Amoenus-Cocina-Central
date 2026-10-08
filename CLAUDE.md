@@ -17,10 +17,11 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 
 - Hecho: monorepo, layout/menú según los mockups, router con secciones provisionales, CRUD completo de
   artículos de venta y de sus familias (API + web + tests; familia opcional, filtro por familia).
-- Sin autenticación: el front usa usuarios de prueba (`apps/web/src/stores/session.ts`) con selector de rol
-  en desarrollo.
-- Pendiente de decidir: integración con Amoenus Central y login (ver preguntas abiertas en
-  `docs/integracion-amoenus-central.md`). Logo de ¡La Empanadera! provisional.
+- Login propio con usuario y contraseña (colección `users`, JWT en `Authorization: Bearer`). Toda la
+  API salvo `/auth/login` y `/health` exige sesión; las escrituras usan `app.requireRole(...)`.
+  `pnpm db:seed` crea los usuarios `admin` y `tienda` (contraseñas de desarrollo en `seed.ts`).
+- Pendiente de decidir: integración con Amoenus Central y si el login pasa a ser contra Amoenus (ver
+  preguntas abiertas en `docs/integracion-amoenus-central.md`). Logo de ¡La Empanadera! provisional.
 - Siguiente: módulos `stores` y `orders` (pantalla Nuevo Pedido), después Solicitudes, validación y albarán PDF.
 
 ## Reglas de código

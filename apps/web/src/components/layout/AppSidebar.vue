@@ -1,20 +1,11 @@
 <script setup lang="ts">
-import { USER_ROLE_LABELS, USER_ROLES, type UserRole } from '@cocina-central/shared'
 import { LogOutIcon } from '@lucide/vue'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { toast } from 'vue-sonner'
 
 import logoUrl from '@/assets/brand/logo-la-empanadera.svg'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { NAV_ITEMS } from '@/config/navigation'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
@@ -22,7 +13,8 @@ import { useSessionStore } from '@/stores/session'
 const session = useSessionStore()
 const route = useRoute()
 const router = useRouter()
-const isDev = import.meta.env.DEV
+
+const displayName = computed(() => session.user?.displayName ?? '')
 
 const items = computed(() =>
   NAV_ITEMS.filter((item) => session.hasRole(item.roles)).map((item) => {
@@ -32,7 +24,7 @@ const items = computed(() =>
 )
 
 const initials = computed(() =>
-  session.user.displayName
+  displayName.value
     .split(' ')
     .map((word) => word[0])
     .join('')
@@ -40,14 +32,9 @@ const initials = computed(() =>
     .toUpperCase(),
 )
 
-function onSwitchRole(role: unknown) {
-  session.switchRole(role as UserRole)
-  router.push({ name: 'home' })
-}
-
-function logout() {
-  // TODO(auth): cerrar sesión cuando exista autenticación.
-  toast.info('El cierre de sesión llegará con la integración de usuarios de Amoenus Central')
+async function logout() {
+  session.logout()
+  await router.push({ name: 'login' })
 }
 </script>
 
@@ -83,24 +70,13 @@ function logout() {
           <AvatarFallback>{{ initials }}</AvatarFallback>
         </Avatar>
         <div class="hidden min-w-0 lg:block">
-          <p class="truncate text-sm font-semibold">{{ session.user.displayName }}</p>
+          <p class="truncate text-sm font-semibold">{{ displayName }}</p>
           <p v-if="session.isKitchenAdmin" class="truncate text-xs text-muted-foreground">
             {{ session.roleLabel }}
           </p>
           <p v-else class="text-xs text-primary">Conectado</p>
         </div>
       </div>
-
-      <Select v-if="isDev" :model-value="session.user.role" @update:model-value="onSwitchRole">
-        <SelectTrigger size="sm" class="hidden w-full lg:flex" title="Solo en desarrollo">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem v-for="role in USER_ROLES" :key="role" :value="role">
-            Ver como: {{ USER_ROLE_LABELS[role] }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
 
       <Button variant="outline" size="sm" title="Cerrar sesión" @click="logout">
         <LogOutIcon />

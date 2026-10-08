@@ -37,6 +37,20 @@ export class ValidationError extends AppError {
   }
 }
 
+/** Falta el token de sesión, no es válido o las credenciales son incorrectas. */
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Inicia sesión para continuar') {
+    super(401, 'UNAUTHORIZED', message)
+  }
+}
+
+/** El usuario está autenticado pero su rol no le permite la operación. */
+export class ForbiddenError extends AppError {
+  constructor(message = 'No tienes permiso para realizar esta operación') {
+    super(403, 'FORBIDDEN', message)
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(message = 'Recurso no encontrado') {
     super(404, 'NOT_FOUND', message)

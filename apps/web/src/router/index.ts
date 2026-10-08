@@ -11,12 +11,20 @@ declare module 'vue-router' {
     description?: string
     /** Roles con acceso. Sin definir = cualquier usuario autenticado. */
     roles?: readonly UserRole[]
+    /** Accesible sin iniciar sesión (solo el login). */
+    public?: boolean
   }
 }
 
 const ComingSoonView = () => import('@/views/ComingSoonView.vue')
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/modules/auth/views/LoginView.vue'),
+    meta: { title: 'Iniciar sesión', public: true },
+  },
   {
     path: '/',
     component: AppLayout,
@@ -100,7 +108,16 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (!useSessionStore().hasRole(to.meta.roles)) return { name: 'home' }
+  const session = useSessionStore()
+
+  if (to.meta.public) {
+    // Con sesión iniciada no tiene sentido volver al login.
+    return session.isAuthenticated ? { name: 'home' } : true
+  }
+  if (!session.isAuthenticated) {
+    return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
+  }
+  if (!session.hasRole(to.meta.roles)) return { name: 'home' }
 })
 
 router.afterEach((to) => {

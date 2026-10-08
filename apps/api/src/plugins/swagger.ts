@@ -17,8 +17,15 @@ export async function registerSwagger(app: FastifyInstance): Promise<void> {
       },
       tags: [
         { name: 'health', description: 'Estado del servicio' },
+        { name: 'auth', description: 'Inicio de sesión' },
         { name: 'sale-articles', description: 'Artículos de venta del obrador' },
+        { name: 'families', description: 'Familias de artículos de venta' },
       ],
+      components: {
+        securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+      },
+      // Todas las rutas exigen token salvo las que declaran `security: []` (login, health).
+      security: [{ bearerAuth: [] }],
     },
     transform: jsonSchemaTransform,
   })

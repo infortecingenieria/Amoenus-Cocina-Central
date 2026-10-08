@@ -1,35 +1,62 @@
-import { USER_ROLE_LABELS, type UserRole } from '@cocina-central/shared'
-import { useLocalStorage } from '@vueuse/core'
+import { USER_ROLE_LABELS, type AuthUser, type LoginInput, type UserRole } from '@cocina-central/shared'
+import { StorageSerializers, useLocalStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed } from 'vue'
 
-export interface SessionUser {
-  displayName: string
-  role: UserRole
-  /** Tienda a la que pertenece el usuario (null para el obrador). */
-  storeName: string | null
-}
+import { queryClient } from '@/lib/query-client'
+import { authApi } from '@/modules/auth/api/auth.api'
 
-// TODO(auth): usuarios fijos hasta decidir cómo se autentica contra Amoenus Central
-// (ver docs/integracion-amoenus-central.md). Permiten revisar las pantallas de cada rol.
-const DEV_USERS: Record<UserRole, SessionUser> = {
-  store: { displayName: 'Tienda Mayor', role: 'store', storeName: 'Tienda Mayor' },
-  kitchen_admin: { displayName: 'Admin', role: 'kitchen_admin', storeName: null },
-}
+const TOKEN_KEY = 'cocina-central:token'
+const USER_KEY = 'cocina-central:user'
 
+/**
+ * Sesión del usuario: token JWT y datos del usuario, guardados en localStorage para mantener la
+ * sesión al recargar. La API valida el token en cada petición; si caduca responde 401 y
+ * `main.ts` cierra la sesión.
+ */
 export const useSessionStore = defineStore('session', () => {
-  const role = useLocalStorage<UserRole>('cocina-central:dev-role', 'store')
+  const token = useLocalStorage<string | null>(TOKEN_KEY, null)
+  const storedUser = useLocalStorage<AuthUser | null>(USER_KEY, null, {
+    serializer: StorageSerializers.object,
+  })
 
-  const user = computed(() => DEV_USERS[role.value] ?? DEV_USERS.store)
-  const roleLabel = computed(() => USER_ROLE_LABELS[user.value.role])
-  const isKitchenAdmin = computed(() => user.value.role === 'kitchen_admin')
+  const isAuthenticated = computed(() => token.value !== null && storedUser.value !== null)
+
+  const user = computed(() => storedUser.value)
+  const roleLabel = computed(() => (storedUser.value ? USER_ROLE_LABELS[storedUser.value.role] : ''))
+  const isKitchenAdmin = computed(() => storedUser.value?.role === 'kitchen_admin')
 
   const hasRole = (roles?: readonly UserRole[]): boolean =>
-    !roles || roles.includes(user.value.role)
+    !roles || (storedUser.value !== null && roles.includes(storedUser.value.role))
 
-  function switchRole(next: UserRole) {
-    role.value = next
+  async function login(input: LoginInput) {
+    const response = await authApi.login(input)
+    token.value = response.token
+    storedUser.value = response.user
   }
 
-  return { user, roleLabel, isKitchenAdmin, hasRole, switchRole }
+  /** Actualiza los datos del usuario desde la API (p. ej. si ha cambiado su rol). */
+  async function refreshUser() {
+    if (!token.value) return
+    storedUser.value = await authApi.me()
+  }
+
+  function logout() {
+    token.value = null
+    storedUser.value = null
+    // Que el siguiente usuario no vea datos cacheados del anterior.
+    queryClient.clear()
+  }
+
+  return {
+    token,
+    user,
+    isAuthenticated,
+    roleLabel,
+    isKitchenAdmin,
+    hasRole,
+    login,
+    refreshUser,
+    logout,
+  }
 })

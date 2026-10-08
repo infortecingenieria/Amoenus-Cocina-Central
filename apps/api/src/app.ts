@@ -9,13 +9,18 @@ import {
 } from 'fastify-type-provider-zod'
 
 import type { AppConfig } from './config/env'
+import { authRoutes } from './modules/auth/auth.routes'
 import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
+import { authPlugin } from './plugins/auth'
 import { registerErrorHandler } from './plugins/error-handler'
 import { registerSwagger } from './plugins/swagger'
 
-export type AppOptions = Pick<AppConfig, 'nodeEnv' | 'logLevel' | 'corsOrigins' | 'docsEnabled'>
+export type AppOptions = Pick<
+  AppConfig,
+  'nodeEnv' | 'logLevel' | 'corsOrigins' | 'docsEnabled' | 'jwtSecret' | 'jwtExpiresIn'
+>
 
 const buildLogger = ({ nodeEnv, logLevel }: AppOptions): FastifyServerOptions['logger'] => {
   if (nodeEnv === 'test') return false
@@ -31,10 +36,20 @@ const buildLogger = ({ nodeEnv, logLevel }: AppOptions): FastifyServerOptions['l
   return { level: logLevel }
 }
 
-/** Rutas de negocio versionadas. Cada módulo nuevo se registra aquí con su prefijo. */
+/**
+ * Rutas de negocio versionadas. Cada módulo nuevo se registra aquí con su prefijo, dentro del
+ * bloque protegido salvo que deba ser público (como el login).
+ */
 const apiV1Routes: FastifyPluginAsyncZod = async (app) => {
-  await app.register(saleArticleRoutes, { prefix: '/sale-articles' })
-  await app.register(familyRoutes, { prefix: '/families' })
+  await app.register(authRoutes, { prefix: '/auth' })
+
+  // Todo lo registrado aquí exige sesión iniciada.
+  await app.register(async (protectedApp) => {
+    protectedApp.addHook('onRequest', protectedApp.authenticate)
+
+    await protectedApp.register(saleArticleRoutes, { prefix: '/sale-articles' })
+    await protectedApp.register(familyRoutes, { prefix: '/families' })
+  })
 }
 
 /**
@@ -50,6 +65,10 @@ export async function buildApp(options: AppOptions) {
 
   await app.register(helmet)
   await app.register(cors, { origin: options.corsOrigins })
+  await app.register(authPlugin, {
+    jwtSecret: options.jwtSecret,
+    jwtExpiresIn: options.jwtExpiresIn,
+  })
   if (options.docsEnabled) await registerSwagger(app)
 
   await app.register(healthRoutes)

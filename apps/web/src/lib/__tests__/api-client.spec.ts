@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, apiClient, buildUrl } from '../api-client'
+import { ApiError, apiClient, buildUrl, configureApiClient } from '../api-client'
 
 const jsonResponse = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -8,6 +8,36 @@ const jsonResponse = (status: number, body: unknown) =>
 describe('api-client', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    configureApiClient({ getToken: () => null, onUnauthorized: () => {} })
+  })
+
+  const unauthorizedBody = { statusCode: 401, code: 'UNAUTHORIZED', message: 'Sin sesión' }
+
+  it('envía el token de sesión en la cabecera Authorization', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(200, []))
+    vi.stubGlobal('fetch', fetchMock)
+    configureApiClient({ getToken: () => 'token-de-prueba', onUnauthorized: () => {} })
+
+    await apiClient.get('/sale-articles')
+
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      Authorization: 'Bearer token-de-prueba',
+    })
+  })
+
+  it('avisa de la sesión caducada con un 401, salvo en el propio login', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(401, unauthorizedBody)),
+    )
+    const onUnauthorized = vi.fn<() => void>()
+    configureApiClient({ getToken: () => 'caducado', onUnauthorized })
+
+    await expect(apiClient.get('/sale-articles')).rejects.toBeInstanceOf(ApiError)
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+
+    await expect(apiClient.post('/auth/login', {})).rejects.toBeInstanceOf(ApiError)
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
   })
 
   it('construye la URL omitiendo los parámetros vacíos', () => {

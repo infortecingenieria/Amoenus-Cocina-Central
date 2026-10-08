@@ -67,7 +67,9 @@ Descartada de partida: el stack elegido (Vue 3 + Fastify + TS) no encaja con el 
 3. **Login contra `/api/integrations/login`**: pensado para integraciones máquina a máquina, no
    para usuarios finales.
 
-Mientras tanto, el front trabaja con usuarios de prueba (`apps/web/src/stores/session.ts`).
+De momento está implementada la opción 1, de forma provisional: colección `users` propia, login
+con usuario y contraseña y JWT (ver `apps/api/src/modules/auth`). Si se pasa a la opción 2, solo
+cambiaría cómo se obtiene el token; los permisos por rol de la API y de la web se mantienen.
 
 ## Preguntas abiertas
 

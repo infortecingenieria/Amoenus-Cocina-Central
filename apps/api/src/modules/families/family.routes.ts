@@ -17,9 +17,12 @@ export const familyRoutes: FastifyPluginAsyncZod = async (app) => {
     new FamilyService(new FamilyRepository(), new SaleArticleRepository()),
   )
 
+  // Consultar: cualquier usuario. Modificar: solo el obrador.
+  const onlyKitchenAdmin = app.requireRole('kitchen_admin')
+
   app.get('/', { schema: listFamiliesRoute }, controller.list)
   app.get('/:id', { schema: getFamilyRoute }, controller.getById)
-  app.post('/', { schema: createFamilyRoute }, controller.create)
-  app.patch('/:id', { schema: updateFamilyRoute }, controller.update)
-  app.delete('/:id', { schema: deleteFamilyRoute }, controller.delete)
+  app.post('/', { schema: createFamilyRoute, preHandler: onlyKitchenAdmin }, controller.create)
+  app.patch('/:id', { schema: updateFamilyRoute, preHandler: onlyKitchenAdmin }, controller.update)
+  app.delete('/:id', { schema: deleteFamilyRoute, preHandler: onlyKitchenAdmin }, controller.delete)
 }

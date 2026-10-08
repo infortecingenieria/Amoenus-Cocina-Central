@@ -17,9 +17,24 @@ export const saleArticleRoutes: FastifyPluginAsyncZod = async (app) => {
     new SaleArticleService(new SaleArticleRepository(), new FamilyRepository()),
   )
 
+  // Consultar: cualquier usuario (las tiendas ven el catálogo). Modificar: solo el obrador.
+  const onlyKitchenAdmin = app.requireRole('kitchen_admin')
+
   app.get('/', { schema: listSaleArticlesRoute }, controller.list)
   app.get('/:id', { schema: getSaleArticleRoute }, controller.getById)
-  app.post('/', { schema: createSaleArticleRoute }, controller.create)
-  app.patch('/:id', { schema: updateSaleArticleRoute }, controller.update)
-  app.delete('/:id', { schema: deleteSaleArticleRoute }, controller.delete)
+  app.post(
+    '/',
+    { schema: createSaleArticleRoute, preHandler: onlyKitchenAdmin },
+    controller.create,
+  )
+  app.patch(
+    '/:id',
+    { schema: updateSaleArticleRoute, preHandler: onlyKitchenAdmin },
+    controller.update,
+  )
+  app.delete(
+    '/:id',
+    { schema: deleteSaleArticleRoute, preHandler: onlyKitchenAdmin },
+    controller.delete,
+  )
 }

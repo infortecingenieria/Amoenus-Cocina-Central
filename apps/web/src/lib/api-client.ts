@@ -23,6 +23,23 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+interface ApiClientConfig {
+  /** Token de sesión a enviar en `Authorization`, o null si no hay sesión. */
+  getToken: () => string | null
+  /** Se llama cuando la API responde 401 (sesión caducada o no válida). */
+  onUnauthorized: () => void
+}
+
+/** Rutas cuyo 401 es un resultado normal (credenciales incorrectas), no una sesión caducada. */
+const AUTH_LOGIN_PATH = '/auth/login'
+
+let config: ApiClientConfig = { getToken: () => null, onUnauthorized: () => {} }
+
+/** Conecta el cliente con la sesión. Se hace en `main.ts` para no importar aquí el store. */
+export function configureApiClient(next: ApiClientConfig): void {
+  config = next
+}
+
 export function buildUrl(path: string, query: QueryParams = {}): string {
   const url = new URL(`${API_BASE_URL}${path}`, window.location.origin)
   for (const [key, value] of Object.entries(query)) {
@@ -34,15 +51,21 @@ export function buildUrl(path: string, query: QueryParams = {}): string {
 
 async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
   const hasBody = options.body !== undefined
+  const token = config.getToken()
+  const headers: Record<string, string> = {}
+  if (hasBody) headers['Content-Type'] = 'application/json'
+  if (token) headers.Authorization = `Bearer ${token}`
+
   const response = await fetch(buildUrl(path, options.query), {
     method,
-    headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: hasBody ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
   })
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null
+    if (response.status === 401 && path !== AUTH_LOGIN_PATH) config.onUnauthorized()
     throw new ApiError(response.status, body)
   }
 

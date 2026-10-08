@@ -21,6 +21,9 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
+  /** Duración del token de sesión, en formato de `@fastify/jwt` («12h», «7d»…). */
+  JWT_EXPIRES_IN: z.string().default('12h'),
 })
 
 export interface AppConfig {
@@ -31,6 +34,8 @@ export interface AppConfig {
   mongodbUri: string
   corsOrigins: string[]
   docsEnabled: boolean
+  jwtSecret: string
+  jwtExpiresIn: string
 }
 
 /** Lee y valida las variables de entorno. Si hay un `.env` en el directorio actual, se carga antes. */
@@ -55,5 +60,7 @@ export function loadConfig(): AppConfig {
     mongodbUri: env.MONGODB_URI,
     corsOrigins: env.CORS_ORIGINS,
     docsEnabled: env.API_DOCS_ENABLED,
+    jwtSecret: env.JWT_SECRET,
+    jwtExpiresIn: env.JWT_EXPIRES_IN,
   }
 }

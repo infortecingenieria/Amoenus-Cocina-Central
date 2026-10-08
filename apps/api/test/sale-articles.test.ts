@@ -5,6 +5,7 @@ import type {
   Paginated,
   SaleArticle,
 } from '@cocina-central/shared'
+import type { InjectOptions } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { clearDatabase, createTestApp, type TestContext } from './helpers/test-app'
@@ -32,12 +33,16 @@ describe('API /sale-articles', () => {
     await clearDatabase()
   })
 
+  // Peticiones como administrador del obrador (los permisos se prueban en auth.test.ts).
+  const inject = (options: InjectOptions) =>
+    ctx.app.inject({ ...options, headers: { ...ctx.authHeaders(), ...options.headers } })
+
   const create = (payload: CreateSaleArticleInput) =>
-    ctx.app.inject({ method: 'POST', url: baseUrl, payload })
+    inject({ method: 'POST', url: baseUrl, payload })
 
   const createFamily = async (name: string) =>
     (
-      await ctx.app.inject({ method: 'POST', url: '/api/v1/families', payload: { name } })
+      await inject({ method: 'POST', url: '/api/v1/families', payload: { name } })
     ).json<Family>()
 
   it('crea un artículo aplicando los valores por defecto', async () => {
@@ -66,7 +71,7 @@ describe('API /sale-articles', () => {
       familyName: 'Panadería',
     })
 
-    const fetched = await ctx.app.inject({ url: `${baseUrl}/${created.json<SaleArticle>().id}` })
+    const fetched = await inject({ url: `${baseUrl}/${created.json<SaleArticle>().id}` })
     expect(fetched.json<SaleArticle>().familyName).toBe('Panadería')
   })
 
@@ -84,7 +89,7 @@ describe('API /sale-articles', () => {
     const bolleria = await createFamily('Bollería')
     const created = (await create({ ...barra, familyId: panaderia.id })).json<SaleArticle>()
     const patch = (payload: object) =>
-      ctx.app.inject({ method: 'PATCH', url: `${baseUrl}/${created.id}`, payload })
+      inject({ method: 'PATCH', url: `${baseUrl}/${created.id}`, payload })
 
     expect((await patch({ familyId: bolleria.id })).json<SaleArticle>()).toMatchObject({
       familyId: bolleria.id,
@@ -108,18 +113,18 @@ describe('API /sale-articles', () => {
       price: 0.9,
     })
 
-    const byFamily = await ctx.app.inject({ url: `${baseUrl}?familyId=${panaderia.id}` })
+    const byFamily = await inject({ url: `${baseUrl}?familyId=${panaderia.id}` })
     expect(byFamily.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual([
       '10001',
       '10002',
     ])
 
-    const withoutFamily = await ctx.app.inject({ url: `${baseUrl}?familyId=none` })
+    const withoutFamily = await inject({ url: `${baseUrl}?familyId=none` })
     expect(withoutFamily.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual([
       '20001',
     ])
 
-    const invalid = await ctx.app.inject({ url: `${baseUrl}?familyId=otra` })
+    const invalid = await inject({ url: `${baseUrl}?familyId=otra` })
     expect(invalid.statusCode).toBe(400)
   })
 
@@ -177,21 +182,21 @@ describe('API /sale-articles', () => {
       active: false,
     })
 
-    const all = await ctx.app.inject({ url: `${baseUrl}?pageSize=2` })
+    const all = await inject({ url: `${baseUrl}?pageSize=2` })
     expect(all.json<Paginated<SaleArticle>>()).toMatchObject({ total: 3, page: 1, pageSize: 2 })
     expect(all.json<Paginated<SaleArticle>>().items).toHaveLength(2)
 
-    const search = await ctx.app.inject({ url: `${baseUrl}?search=croiss` })
+    const search = await inject({ url: `${baseUrl}?search=croiss` })
     expect(search.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual(['20001'])
 
-    const active = await ctx.app.inject({ url: `${baseUrl}?active=true` })
+    const active = await inject({ url: `${baseUrl}?active=true` })
     expect(active.json<Paginated<SaleArticle>>().total).toBe(2)
   })
 
   it('actualiza parcialmente sin tocar los campos no enviados', async () => {
     const created = (await create({ ...barra, active: false })).json<SaleArticle>()
 
-    const response = await ctx.app.inject({
+    const response = await inject({
       method: 'PATCH',
       url: `${baseUrl}/${created.id}`,
       payload: { price: 1.555 },
@@ -208,23 +213,23 @@ describe('API /sale-articles', () => {
   it('devuelve 404 al consultar o borrar un artículo inexistente', async () => {
     const missingId = '64b7f0c2a1b2c3d4e5f60718'
 
-    expect((await ctx.app.inject({ url: `${baseUrl}/${missingId}` })).statusCode).toBe(404)
+    expect((await inject({ url: `${baseUrl}/${missingId}` })).statusCode).toBe(404)
     expect(
-      (await ctx.app.inject({ method: 'DELETE', url: `${baseUrl}/${missingId}` })).statusCode,
+      (await inject({ method: 'DELETE', url: `${baseUrl}/${missingId}` })).statusCode,
     ).toBe(404)
   })
 
   it('elimina un artículo', async () => {
     const created = (await create(barra)).json<SaleArticle>()
 
-    const response = await ctx.app.inject({ method: 'DELETE', url: `${baseUrl}/${created.id}` })
+    const response = await inject({ method: 'DELETE', url: `${baseUrl}/${created.id}` })
 
     expect(response.statusCode).toBe(204)
-    expect((await ctx.app.inject({ url: `${baseUrl}/${created.id}` })).statusCode).toBe(404)
+    expect((await inject({ url: `${baseUrl}/${created.id}` })).statusCode).toBe(404)
   })
 
   it('genera la especificación OpenAPI', async () => {
-    const response = await ctx.app.inject({ url: '/docs/json' })
+    const response = await inject({ url: '/docs/json' })
 
     expect(response.statusCode).toBe(200)
     expect(Object.keys(response.json<{ paths: object }>().paths)).toContain(

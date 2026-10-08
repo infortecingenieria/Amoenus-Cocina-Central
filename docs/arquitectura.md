@@ -36,6 +36,10 @@ Transversal:
 - `plugins/error-handler.ts`: todo error sale como `ApiErrorBody`
   (`{ statusCode, code, message, details? }`), con `code` estable (`VALIDATION_ERROR`, `NOT_FOUND`,
   `CONFLICT`, `INVALID_STATE`…) para que el front no dependa del texto.
+- `plugins/auth.ts`: sesión con JWT (`Authorization: Bearer`). `POST /api/v1/auth/login` es público;
+  el resto de `/api/v1` pasa por `app.authenticate` (401 `UNAUTHORIZED`) y las rutas que solo puede
+  usar el obrador añaden `preHandler: app.requireRole('kitchen_admin')` (403 `FORBIDDEN`).
+  Contraseñas con `scrypt` de `node:crypto` (`modules/auth/password.ts`).
 - `plugins/swagger.ts`: OpenAPI generado desde los esquemas, en `/docs`.
 - Rutas de negocio versionadas bajo `/api/v1`. `GET /health` informa del estado de la base de datos.
 - `buildApp()` no abre conexiones ni puertos: `server.ts` conecta Mongo y escucha; los tests usan
@@ -50,13 +54,21 @@ Transversal:
 - **Estado de cliente** (sesión, carrito del pedido en curso) → Pinia.
 - `components/ui/` lo genera el CLI de shadcn-vue (`npx shadcn-vue@latest add <componente>`). No se
   edita a mano; las adaptaciones van en `assets/main.css` o en componentes propios.
-- Rutas con `meta.roles` para restringir pantallas por rol (`store`, `kitchen_admin`).
+- Rutas con `meta.roles` para restringir pantallas por rol (`store`, `kitchen_admin`). Todas exigen
+  sesión salvo las marcadas con `meta.public` (`/login`). El store `session` guarda token y usuario
+  en localStorage; `apiClient` envía el token y, ante un 401, `main.ts` cierra la sesión.
 
 ## Modelo de datos (propuesta)
 
-Implementado: `families` y `sale_articles`. El resto es la propuesta para los siguientes módulos.
+Implementado: `users`, `families` y `sale_articles`. El resto es la propuesta para los siguientes
+módulos.
 
 ```
+users (usuarios de la aplicación)                     ✅ implementado
+  _id, username (único, en minúsculas), passwordHash (scrypt), displayName,
+  role (store|kitchen_admin), storeName?, active, createdAt, updatedAt
+  ← cuando exista `stores`, storeName pasará a ser storeId
+
 stores (tiendas)
   _id, code, name, active, amoenusLocalId?            ← local equivalente en Amoenus Central
 

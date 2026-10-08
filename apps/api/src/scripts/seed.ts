@@ -1,7 +1,7 @@
 /**
  * Datos iniciales para desarrollo local: `pnpm db:seed` (desde la raíz).
- * Es idempotente: crea o actualiza por nombre (familias) y por código o nombre (artículos), nunca
- * duplica ni borra otros datos.
+ * Es idempotente: crea o actualiza por usuario (usuarios), por nombre (familias) y por código o
+ * nombre (artículos), nunca duplica ni borra otros datos.
  */
 import {
   createFamilySchema,
@@ -11,8 +11,32 @@ import {
 import mongoose from 'mongoose'
 
 import { loadConfig } from '../config/env'
+import { hashPassword } from '../modules/auth/password'
+import { UserModel } from '../modules/auth/user.model'
+import { UserRepository, type UpsertUserData } from '../modules/auth/user.repository'
 import { FAMILY_NAME_COLLATION, FamilyModel } from '../modules/families/family.model'
 import { SaleArticleModel } from '../modules/sale-articles/sale-article.model'
+
+/**
+ * Usuarios de desarrollo. Las contraseñas se restablecen cada vez que se ejecuta el seed y se
+ * pueden cambiar con SEED_ADMIN_PASSWORD / SEED_STORE_PASSWORD.
+ */
+const USERS: (Omit<UpsertUserData, 'passwordHash'> & { password: string })[] = [
+  {
+    username: 'admin',
+    password: process.env.SEED_ADMIN_PASSWORD ?? 'admin',
+    displayName: 'Admin',
+    role: 'kitchen_admin',
+    storeName: null,
+  },
+  {
+    username: 'tienda',
+    password: process.env.SEED_STORE_PASSWORD ?? 'tienda',
+    displayName: 'Tienda Mayor',
+    role: 'store',
+    storeName: 'Tienda Mayor',
+  },
+]
 
 const FAMILIES = ['Panadería', 'Bollería', 'Salados'] as const
 type FamilyName = (typeof FAMILIES)[number]
@@ -67,7 +91,16 @@ if (config.nodeEnv === 'production') {
 
 await mongoose.connect(config.mongodbUri)
 try {
-  await Promise.all([FamilyModel.init(), SaleArticleModel.init()])
+  await Promise.all([UserModel.init(), FamilyModel.init(), SaleArticleModel.init()])
+
+  const users = new UserRepository()
+  for (const { password, ...data } of USERS) {
+    const user = await users.upsertByUsername({
+      ...data,
+      passwordHash: await hashPassword(password),
+    })
+    console.log(`usuario     ${user.username} (${user.role})`)
+  }
 
   const familyIds = new Map<FamilyName, string>()
   for (const name of FAMILIES) {

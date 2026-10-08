@@ -1,4 +1,5 @@
 import type { ApiErrorBody, Family, Paginated } from '@cocina-central/shared'
+import type { InjectOptions } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { clearDatabase, createTestApp, type TestContext } from './helpers/test-app'
@@ -18,8 +19,12 @@ describe('API /families', () => {
     await clearDatabase()
   })
 
+  // Peticiones como administrador del obrador (los permisos se prueban en auth.test.ts).
+  const inject = (options: InjectOptions) =>
+    ctx.app.inject({ ...options, headers: { ...ctx.authHeaders(), ...options.headers } })
+
   const create = (name: string) =>
-    ctx.app.inject({ method: 'POST', url: baseUrl, payload: { name } })
+    inject({ method: 'POST', url: baseUrl, payload: { name } })
 
   it('crea una familia', async () => {
     const response = await create('  Bollería  ')
@@ -52,21 +57,21 @@ describe('API /families', () => {
     await create('Bollería')
     await create('Panadería')
 
-    const all = await ctx.app.inject({ url: `${baseUrl}?pageSize=2` })
+    const all = await inject({ url: `${baseUrl}?pageSize=2` })
     expect(all.json<Paginated<Family>>()).toMatchObject({ total: 3, page: 1, pageSize: 2 })
     expect(all.json<Paginated<Family>>().items.map((f) => f.name)).toEqual([
       'Bollería',
       'Panadería',
     ])
 
-    const search = await ctx.app.inject({ url: `${baseUrl}?search=sal` })
+    const search = await inject({ url: `${baseUrl}?search=sal` })
     expect(search.json<Paginated<Family>>().items.map((f) => f.name)).toEqual(['Salados'])
   })
 
   it('renombra una familia y permite mantener el mismo nombre', async () => {
     const created = (await create('Boleria')).json<Family>()
     const rename = (name: string) =>
-      ctx.app.inject({ method: 'PATCH', url: `${baseUrl}/${created.id}`, payload: { name } })
+      inject({ method: 'PATCH', url: `${baseUrl}/${created.id}`, payload: { name } })
 
     expect((await rename('Bollería')).json<Family>().name).toBe('Bollería')
     expect((await rename('Bollería')).statusCode).toBe(200)
@@ -78,24 +83,24 @@ describe('API /families', () => {
   it('devuelve 404 con una familia inexistente', async () => {
     const missingId = '64b7f0c2a1b2c3d4e5f60718'
 
-    expect((await ctx.app.inject({ url: `${baseUrl}/${missingId}` })).statusCode).toBe(404)
+    expect((await inject({ url: `${baseUrl}/${missingId}` })).statusCode).toBe(404)
     expect(
-      (await ctx.app.inject({ method: 'DELETE', url: `${baseUrl}/${missingId}` })).statusCode,
+      (await inject({ method: 'DELETE', url: `${baseUrl}/${missingId}` })).statusCode,
     ).toBe(404)
   })
 
   it('elimina una familia sin artículos', async () => {
     const created = (await create('Salados')).json<Family>()
 
-    const response = await ctx.app.inject({ method: 'DELETE', url: `${baseUrl}/${created.id}` })
+    const response = await inject({ method: 'DELETE', url: `${baseUrl}/${created.id}` })
 
     expect(response.statusCode).toBe(204)
-    expect((await ctx.app.inject({ url: `${baseUrl}/${created.id}` })).statusCode).toBe(404)
+    expect((await inject({ url: `${baseUrl}/${created.id}` })).statusCode).toBe(404)
   })
 
   it('no elimina una familia con artículos asignados', async () => {
     const family = (await create('Bollería')).json<Family>()
-    await ctx.app.inject({
+    await inject({
       method: 'POST',
       url: '/api/v1/sale-articles',
       payload: {
@@ -108,7 +113,7 @@ describe('API /families', () => {
       },
     })
 
-    const response = await ctx.app.inject({ method: 'DELETE', url: `${baseUrl}/${family.id}` })
+    const response = await inject({ method: 'DELETE', url: `${baseUrl}/${family.id}` })
 
     expect(response.statusCode).toBe(409)
     expect(response.json<ApiErrorBody>()).toMatchObject({
@@ -118,7 +123,7 @@ describe('API /families', () => {
   })
 
   it('aparece en la especificación OpenAPI', async () => {
-    const response = await ctx.app.inject({ url: '/docs/json' })
+    const response = await inject({ url: '/docs/json' })
 
     expect(Object.keys(response.json<{ paths: object }>().paths)).toContain('/api/v1/families/')
   })
