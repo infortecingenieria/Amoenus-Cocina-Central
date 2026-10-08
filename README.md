@@ -53,6 +53,7 @@ corepack enable                 # una sola vez por máquina
 pnpm install
 cp apps/api/.env.example apps/api/.env
 pnpm db:up                      # MongoDB 9 en localhost:27017
+pnpm db:seed                    # artículos de ejemplo (se puede repetir sin duplicar)
 pnpm dev                        # API en :3000 y web en :5173
 ```
 
@@ -64,15 +65,16 @@ Mientras no haya autenticación, en desarrollo el pie del menú permite cambiar 
 
 ## Scripts (raíz)
 
-| Script                   | Qué hace                                                               |
-| ------------------------ | ---------------------------------------------------------------------- |
-| `pnpm dev`               | API y web en paralelo con recarga en caliente                          |
-| `pnpm build`             | Compila la API (`apps/api/dist/server.mjs`) y la web (`apps/web/dist`) |
-| `pnpm type-check`        | Comprobación de tipos en los tres paquetes                             |
-| `pnpm lint`              | ESLint (y oxlint en web) con autofix                                   |
-| `pnpm test`              | Tests de API (Mongo en memoria) y web                                  |
-| `pnpm format`            | Prettier en todo el repo                                               |
-| `pnpm db:up` / `db:down` | Arranca / para MongoDB en Docker                                       |
+| Script                   | Qué hace                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `pnpm dev`               | API y web en paralelo con recarga en caliente                                      |
+| `pnpm build`             | Compila la API (`apps/api/dist/server.mjs`) y la web (`apps/web/dist`)             |
+| `pnpm type-check`        | Comprobación de tipos en los tres paquetes                                         |
+| `pnpm lint`              | ESLint (y oxlint en web) con autofix                                               |
+| `pnpm test`              | Tests de API (Mongo en memoria) y web                                              |
+| `pnpm format`            | Prettier en todo el repo                                                           |
+| `pnpm db:up` / `db:down` | Arranca / para MongoDB en Docker                                                   |
+| `pnpm db:seed`           | Carga datos de ejemplo en la base local (idempotente; no se ejecuta en producción) |
 
 Para un paquete concreto: `pnpm --filter @cocina-central/api <script>` (o `web`, `shared`).
 Para añadir una dependencia a un paquete: `pnpm --filter @cocina-central/web add <paquete>`.

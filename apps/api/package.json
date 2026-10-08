@@ -8,6 +8,7 @@
     "dev": "tsx watch --clear-screen=false src/server.ts",
     "build": "tsdown",
     "start": "node dist/server.mjs",
+    "db:seed": "tsx src/scripts/seed.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --fix --cache",
     "test": "vitest run"
