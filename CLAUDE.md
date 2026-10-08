@@ -1,6 +1,6 @@
 # Amoenus - Cocina Central
 
-Gestor de pedidos tienda → obrador central (primer cliente: ¡La Empanadera!). Monorepo npm workspaces.
+Gestor de pedidos tienda → obrador central (primer cliente: ¡La Empanadera!). Monorepo con pnpm workspaces.
 Visión general y scripts en `README.md`; capas, modelo de datos y ciclo del pedido en `docs/arquitectura.md`;
 integración con Amoenus Central (Portal Corporativo) en `docs/integracion-amoenus-central.md`.
 
@@ -8,10 +8,13 @@ Este fichero se versiona y lo comparte todo el equipo. Lo personal de cada desar
 máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 
 ## Entorno
-- Node 24 LTS (`.node-version`).
-- MongoDB local: `npm run db:up` (Docker). Los tests usan mongodb-memory-server 9.0.2, no necesitan Docker.
+
+- Node 24 LTS (`.node-version`) y pnpm 11 vía Corepack (`packageManager` en `package.json`). No uses npm:
+  instala siempre desde la raíz (`pnpm install`, `pnpm --filter @cocina-central/<paquete> add <dep>`).
+- MongoDB local: `pnpm db:up` (Docker). Los tests usan mongodb-memory-server 9.0.2, no necesitan Docker.
 
 ## Estado actual (actualizar al avanzar)
+
 - Hecho: monorepo, layout/menú según los mockups, router con secciones provisionales, CRUD completo de
   artículos de venta (API + web + tests).
 - Sin autenticación: el front usa usuarios de prueba (`apps/web/src/stores/session.ts`) con selector de rol
@@ -21,6 +24,7 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 - Siguiente: módulos `stores` y `orders` (pantalla Nuevo Pedido), después Solicitudes, validación y albarán PDF.
 
 ## Reglas de código
+
 - Contratos (esquemas Zod, tipos, enums) SOLO en `packages/shared`; API y web los importan de
   `@cocina-central/shared`.
 - API: un módulo por carpeta `apps/api/src/modules/<modulo>/` con model · repository · service · schemas ·
@@ -29,11 +33,12 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   (`app.ts`).
 - Web: `apps/web/src/modules/<modulo>/` con api · composables (TanStack Query) · components · views.
   Estado de servidor → TanStack Query; estado de cliente → Pinia.
-- `apps/web/src/components/ui/` lo genera shadcn-vue (`npx shadcn-vue@latest add <x>`): no editar a mano.
+- `apps/web/src/components/ui/` lo genera shadcn-vue (`pnpm dlx shadcn-vue@latest add <x>` desde `apps/web`): no editar a mano.
 - TypeScript 6 (no 7: vue-tsc/typescript-eslint no lo soportan aún).
-- Antes de dar algo por terminado: `npm run type-check && npm run lint && npm test && npm run build`.
+- Antes de dar algo por terminado: `pnpm type-check && pnpm lint && pnpm test && pnpm build`.
 
 ## Convenciones de git
+
 - Mensajes de commit en español, minúscula: `feat: ...`, `fix: ...`, `chore: ...`.
 - Sin `Co-Authored-By`, "Generated with Claude Code" ni menciones a Claude en commits o PRs.
 

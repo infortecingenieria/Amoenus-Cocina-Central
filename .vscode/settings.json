@@ -3,9 +3,12 @@
   "explorer.fileNesting.patterns": {
     "tsconfig.json": "tsconfig.*.json, env.d.ts",
     "vite.config.*": "vitest.config.*",
-    "package.json": "package-lock.json, .eslint*, eslint*, .oxlint*, .prettier*, .editorconfig, .node-version, tsdown.config.*"
+    "package.json": "pnpm-lock.yaml, pnpm-workspace.yaml, .eslint*, eslint*, .oxlint*, .prettier*, .editorconfig, .node-version, tsdown.config.*"
   },
   "eslint.workingDirectories": [{ "mode": "auto" }],
+  "npm.enableScriptExplorer": true,
+  "npm.exclude": ["**/node_modules/**", "**/dist/**"],
+  "npm.packageManager": "pnpm",
   "editor.codeActionsOnSave": {
     "source.fixAll": "explicit"
   },

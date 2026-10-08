@@ -15,6 +15,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Abre el navegador al arrancar `npm run dev`.
+    open: true,
     // En desarrollo el front llama a /api y Vite lo reenvía a la API local (sin CORS).
     proxy: {
       '/api': 'http://localhost:3000',

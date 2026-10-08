@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+  - apps/*
+
+# Paquetes a los que se permite ejecutar scripts de instalación (pnpm los bloquea por defecto).
+allowBuilds:
+  esbuild: true # comprueba su binario nativo (lo usan tsx y vite-plugin-vue-devtools)
+  vue-demi: true # elige la variante para Vue 3 (dependencia de @tanstack/vue-query)
+  mongodb-memory-server: false # no hace falta: descarga MongoDB al ejecutar los tests la primera vez

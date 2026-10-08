@@ -4,18 +4,14 @@
   "private": true,
   "description": "Amoenus - Cocina Central: gestor de pedidos de tiendas al obrador",
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
     "dev": "run-p -l dev:api dev:web",
-    "dev:api": "npm run dev -w @cocina-central/api",
-    "dev:web": "npm run dev -w @cocina-central/web",
-    "build": "npm run build --workspaces --if-present",
-    "type-check": "npm run type-check --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "dev:api": "pnpm --filter @cocina-central/api dev",
+    "dev:web": "pnpm --filter @cocina-central/web dev",
+    "build": "pnpm -r --if-present build",
+    "type-check": "pnpm -r --if-present type-check",
+    "lint": "pnpm -r --if-present lint",
+    "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:up": "docker compose up -d mongo",
@@ -23,9 +19,12 @@
   },
   "devDependencies": {
     "npm-run-all2": "^9.0.3",
-    "prettier": "3.9.6"
+    "prettier": "3.9.6",
+    "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=24.11.0"
-  }
+    "node": ">=24.11.0",
+    "pnpm": ">=11"
+  },
+  "packageManager": "pnpm@11.28.2+sha512.755ce2fe3c05bfd7bb412b42aff3c5c55cd38c529c6eca810475497ae36746c571e4b6e1814e6e7e4b97d7ee864b8a0e44673c3b297a50e0ac28771c5ce15d27"
 }

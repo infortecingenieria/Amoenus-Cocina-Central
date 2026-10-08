@@ -2,13 +2,13 @@
 
 ## Monorepo
 
-Un único repositorio con _npm workspaces_:
+Un único repositorio con _pnpm workspaces_ (`pnpm-workspace.yaml`):
 
 - `packages/shared` (`@cocina-central/shared`): **fuente única de los contratos**. Los esquemas Zod
   validan las peticiones en la API, generan la documentación OpenAPI, tipan las respuestas en el
   front y validan los formularios. No se compila: API (tsdown) y web (Vite) importan su código
   TypeScript directamente.
-- `apps/api` y `apps/web` dependen de él como cualquier otro paquete.
+- `apps/api` y `apps/web` dependen de él con `"@cocina-central/shared": "workspace:*"`.
 
 Si un campo cambia, se cambia en `shared` y TypeScript señala todo lo que hay que adaptar en los
 dos lados.
@@ -99,12 +99,13 @@ pending ──► approved ──► in_preparation ──► delivered
 
 ## Decisiones técnicas
 
-| Decisión                                                     | Motivo                                                                                                             |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Node 24 LTS (no 26)                                          | Node 26 aún es _Current_; pasa a LTS a finales de octubre de 2026.                                                 |
-| TypeScript 6.0 (no 7)                                        | `vue-tsc` y `typescript-eslint` todavía no soportan el compilador nativo de TS 7.                                  |
-| API empaquetada con tsdown                                   | Un único `dist/server.mjs` que incluye `@cocina-central/shared`.                                                   |
-| `zod` como _peer_ de `shared`                                | Una sola instancia de Zod en todo el monorepo.                                                                     |
-| Inter autoalojada (`@fontsource-variable/inter`)             | Sin peticiones a Google Fonts (RGPD) ni dependencia de CDN.                                                        |
-| Variantes `data-open/closed/checked/unchecked` en `main.css` | El estilo _vega_ de shadcn-vue usa atributos de Base UI; reka-ui expone `data-state`.                              |
-| Sin `npm audit fix --force`                                  | Las 4 alertas _high_ son de `braces` dentro del tooling de ESLint (sin versión corregida, sin impacto en runtime). |
+| Decisión                                                     | Motivo                                                                                                                                                                                                            |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node 24 LTS (no 26)                                          | Node 26 aún es _Current_; pasa a LTS a finales de octubre de 2026.                                                                                                                                                |
+| TypeScript 6.0 (no 7)                                        | `vue-tsc` y `typescript-eslint` todavía no soportan el compilador nativo de TS 7.                                                                                                                                 |
+| API empaquetada con tsdown                                   | Un único `dist/server.mjs` que incluye `@cocina-central/shared`.                                                                                                                                                  |
+| `zod` como _peer_ de `shared`                                | Una sola instancia de Zod en todo el monorepo.                                                                                                                                                                    |
+| Inter autoalojada (`@fontsource-variable/inter`)             | Sin peticiones a Google Fonts (RGPD) ni dependencia de CDN.                                                                                                                                                       |
+| Variantes `data-open/closed/checked/unchecked` en `main.css` | El estilo _vega_ de shadcn-vue usa atributos de Base UI; reka-ui expone `data-state`.                                                                                                                             |
+| pnpm 11 como gestor de paquetes                              | Dependencias estrictas (sin dependencias fantasma), instalaciones más rápidas y mejor soporte de monorepos. pnpm 12 solo se distribuye como binario nativo y en los equipos con antivirus corporativo no arranca. |
+| Sin `npm audit fix --force`                                  | Las 4 alertas _high_ son de `braces` dentro del tooling de ESLint (sin versión corregida, sin impacto en runtime).                                                                                                |

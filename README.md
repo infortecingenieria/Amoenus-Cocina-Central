@@ -12,7 +12,7 @@ lo aprueba o lo rechaza y genera el albarán de entrega.
 | API (`apps/api`)              | Node 24 LTS, Fastify 5, Mongoose 9, Zod 4 (`fastify-type-provider-zod`), OpenAPI en `/docs`                                         |
 | Contratos (`packages/shared`) | Esquemas Zod, tipos y enumerados compartidos entre API y front                                                                      |
 | Base de datos                 | MongoDB 9.0                                                                                                                         |
-| Calidad                       | TypeScript 6, ESLint 10 (+ oxlint en web), Prettier, Vitest 4, mongodb-memory-server                                                |
+| Calidad                       | TypeScript 6, ESLint 10 (+ oxlint en web), Prettier, Vitest 4, pnpm 11 (workspaces), mongodb-memory-server                          |
 
 > TypeScript 7 (compilador nativo) aún no es compatible con `vue-tsc` ni `typescript-eslint`;
 > se usa la rama 6.0, que es la que fija `create-vue`.
@@ -43,14 +43,17 @@ docs/                  arquitectura e integración con Amoenus Central
 
 ## Puesta en marcha
 
-Requisitos: **Node 24 LTS** (`.node-version`) y Docker para MongoDB.
+Requisitos: **Node 24 LTS** (`.node-version`), **pnpm 11** y Docker para MongoDB.
+pnpm se activa con Corepack, que viene con Node: `corepack enable` (la versión exacta la fija
+`packageManager` en `package.json`).
 
 ```bash
 fnm use                         # o nvm use: Node 24
-npm install
+corepack enable                 # una sola vez por máquina
+pnpm install
 cp apps/api/.env.example apps/api/.env
-npm run db:up                   # MongoDB 9 en localhost:27017
-npm run dev                     # API en :3000 y web en :5173
+pnpm db:up                      # MongoDB 9 en localhost:27017
+pnpm dev                        # API en :3000 y web en :5173
 ```
 
 - Web: http://localhost:5173 (Vite reenvía `/api` a la API).
@@ -61,17 +64,19 @@ Mientras no haya autenticación, en desarrollo el pie del menú permite cambiar 
 
 ## Scripts (raíz)
 
-| Script                      | Qué hace                                                               |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `npm run dev`               | API y web en paralelo con recarga en caliente                          |
-| `npm run build`             | Compila la API (`apps/api/dist/server.mjs`) y la web (`apps/web/dist`) |
-| `npm run type-check`        | Comprobación de tipos en los tres paquetes                             |
-| `npm run lint`              | ESLint (y oxlint en web) con autofix                                   |
-| `npm test`                  | Tests de API (Mongo en memoria) y web                                  |
-| `npm run format`            | Prettier en todo el repo                                               |
-| `npm run db:up` / `db:down` | Arranca / para MongoDB en Docker                                       |
+| Script                   | Qué hace                                                               |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `pnpm dev`               | API y web en paralelo con recarga en caliente                          |
+| `pnpm build`             | Compila la API (`apps/api/dist/server.mjs`) y la web (`apps/web/dist`) |
+| `pnpm type-check`        | Comprobación de tipos en los tres paquetes                             |
+| `pnpm lint`              | ESLint (y oxlint en web) con autofix                                   |
+| `pnpm test`              | Tests de API (Mongo en memoria) y web                                  |
+| `pnpm format`            | Prettier en todo el repo                                               |
+| `pnpm db:up` / `db:down` | Arranca / para MongoDB en Docker                                       |
 
-Para un paquete concreto: `npm run <script> -w @cocina-central/api` (o `web`, `shared`).
+Para un paquete concreto: `pnpm --filter @cocina-central/api <script>` (o `web`, `shared`).
+Para añadir una dependencia a un paquete: `pnpm --filter @cocina-central/web add <paquete>`.
+Instala siempre desde la raíz: es un monorepo con _pnpm workspaces_ (`pnpm-workspace.yaml`).
 
 ## Documentación
 
