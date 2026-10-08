@@ -99,7 +99,7 @@ describe('API /families', () => {
       method: 'POST',
       url: '/api/v1/sale-articles',
       payload: {
-        code: 'CRO-001',
+        code: '20001',
         name: 'Croissant Mantequilla',
         format: 'box',
         unitsPerFormat: 30,

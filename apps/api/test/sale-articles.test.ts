@@ -12,7 +12,7 @@ import { clearDatabase, createTestApp, type TestContext } from './helpers/test-a
 const baseUrl = '/api/v1/sale-articles'
 
 const barra: CreateSaleArticleInput = {
-  code: 'BAR-001',
+  code: '10001',
   name: 'Barra Rústica Tradicional',
   format: 'tray',
   unitsPerFormat: 12,
@@ -99,9 +99,9 @@ describe('API /sale-articles', () => {
   it('filtra por familia y por artículos sin familia', async () => {
     const panaderia = await createFamily('Panadería')
     await create({ ...barra, familyId: panaderia.id })
-    await create({ ...barra, code: 'HOG-001', name: 'Hogaza Centeno', familyId: panaderia.id })
+    await create({ ...barra, code: '10002', name: 'Hogaza Centeno', familyId: panaderia.id })
     await create({
-      code: 'CRO-001',
+      code: '20001',
       name: 'Croissant Mantequilla',
       format: 'box',
       unitsPerFormat: 30,
@@ -110,13 +110,13 @@ describe('API /sale-articles', () => {
 
     const byFamily = await ctx.app.inject({ url: `${baseUrl}?familyId=${panaderia.id}` })
     expect(byFamily.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual([
-      'BAR-001',
-      'HOG-001',
+      '10001',
+      '10002',
     ])
 
     const withoutFamily = await ctx.app.inject({ url: `${baseUrl}?familyId=none` })
     expect(withoutFamily.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual([
-      'CRO-001',
+      '20001',
     ])
 
     const invalid = await ctx.app.inject({ url: `${baseUrl}?familyId=otra` })
@@ -137,6 +137,20 @@ describe('API /sale-articles', () => {
     )
   })
 
+  it('exige un código de exactamente 5 dígitos y conserva los ceros a la izquierda', async () => {
+    for (const code of ['1234', '123456', '12a45', 'BAR-0']) {
+      const response = await create({ ...barra, code })
+      expect(response.statusCode, code).toBe(400)
+      expect(response.json<ApiErrorBody>().details).toEqual([
+        expect.objectContaining({ path: '/code' }),
+      ])
+    }
+
+    const response = await create({ ...barra, code: '00123' })
+    expect(response.statusCode).toBe(201)
+    expect(response.json<SaleArticle>().code).toBe('00123')
+  })
+
   it('no permite códigos duplicados', async () => {
     await create(barra)
     const response = await create({ ...barra, name: 'Otra barra' })
@@ -148,14 +162,14 @@ describe('API /sale-articles', () => {
   it('lista con paginación, búsqueda y filtro por activo', async () => {
     await create(barra)
     await create({
-      code: 'CRO-001',
+      code: '20001',
       name: 'Croissant Mantequilla',
       format: 'box',
       unitsPerFormat: 30,
       price: 0.9,
     })
     await create({
-      code: 'HOG-001',
+      code: '10002',
       name: 'Hogaza Centeno',
       format: 'tray',
       unitsPerFormat: 12,
@@ -168,7 +182,7 @@ describe('API /sale-articles', () => {
     expect(all.json<Paginated<SaleArticle>>().items).toHaveLength(2)
 
     const search = await ctx.app.inject({ url: `${baseUrl}?search=croiss` })
-    expect(search.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual(['CRO-001'])
+    expect(search.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual(['20001'])
 
     const active = await ctx.app.inject({ url: `${baseUrl}?active=true` })
     expect(active.json<Paginated<SaleArticle>>().total).toBe(2)

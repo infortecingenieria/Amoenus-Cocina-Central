@@ -39,7 +39,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -54,14 +53,10 @@ import { formatCurrency } from '@/lib/format'
 import { useFamilyOptions } from '@/modules/families/composables/useFamilies'
 
 import SaleArticleFormDialog from '../components/SaleArticleFormDialog.vue'
-import {
-  useDeleteSaleArticle,
-  useSaleArticleList,
-  useUpdateSaleArticle,
-} from '../composables/useSaleArticles'
+import { useDeleteSaleArticle, useSaleArticleList } from '../composables/useSaleArticles'
 
 const PAGE_SIZE = 20
-const COLUMNS = 8
+const COLUMNS = 7
 const ALL_FAMILIES = 'all'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
@@ -110,19 +105,6 @@ function openCreate() {
 function openEdit(article: SaleArticle) {
   editing.value = article
   formOpen.value = true
-}
-
-// Activar / desactivar desde la tabla
-const updateMutation = useUpdateSaleArticle()
-
-function toggleActive(article: SaleArticle, active: boolean) {
-  updateMutation.mutate(
-    { id: article.id, input: { active } },
-    {
-      onSuccess: () => toast.success(`${article.name} ${active ? 'activado' : 'desactivado'}`),
-      onError: (err) => toast.error(getErrorMessage(err)),
-    },
-  )
 }
 
 // Borrado con confirmación
@@ -196,7 +178,6 @@ async function confirmDelete() {
             <TableHead>Familia</TableHead>
             <TableHead>Formato</TableHead>
             <TableHead class="text-right">Precio</TableHead>
-            <TableHead>Activo</TableHead>
             <TableHead class="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -256,13 +237,6 @@ async function confirmDelete() {
             <TableCell class="text-right tabular-nums">{{
               formatCurrency(article.price)
             }}</TableCell>
-            <TableCell>
-              <Switch
-                :model-value="article.active"
-                :aria-label="`Activar ${article.name}`"
-                @update:model-value="(value: boolean) => toggleActive(article, value)"
-              />
-            </TableCell>
             <TableCell class="text-right">
               <div class="flex justify-end gap-2">
                 <Button variant="outline" size="sm" @click="openEdit(article)">

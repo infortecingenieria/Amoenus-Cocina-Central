@@ -153,6 +153,9 @@ async function submit() {
                 id="code"
                 v-model="form.code"
                 :aria-invalid="!!errors.code"
+                inputmode="numeric"
+                maxlength="5"
+                placeholder="00001"
                 autocomplete="off"
               />
               <FieldError :errors="errors.code" />

@@ -1,7 +1,7 @@
 /**
  * Datos iniciales para desarrollo local: `pnpm db:seed` (desde la raíz).
- * Es idempotente: crea o actualiza por nombre (familias) y por código (artículos), nunca duplica
- * ni borra otros datos.
+ * Es idempotente: crea o actualiza por nombre (familias) y por código o nombre (artículos), nunca
+ * duplica ni borra otros datos.
  */
 import {
   createFamilySchema,
@@ -19,7 +19,7 @@ type FamilyName = (typeof FAMILIES)[number]
 
 const SALE_ARTICLES: (Omit<CreateSaleArticleInput, 'familyId'> & { family: FamilyName })[] = [
   {
-    code: 'BAR-001',
+    code: '10001',
     name: 'Barra Rústica Tradicional',
     family: 'Panadería',
     format: 'tray',
@@ -27,7 +27,7 @@ const SALE_ARTICLES: (Omit<CreateSaleArticleInput, 'familyId'> & { family: Famil
     price: 1.45,
   },
   {
-    code: 'CRO-001',
+    code: '20001',
     name: 'Croissant Mantequilla',
     family: 'Bollería',
     format: 'box',
@@ -35,7 +35,7 @@ const SALE_ARTICLES: (Omit<CreateSaleArticleInput, 'familyId'> & { family: Famil
     price: 0.85,
   },
   {
-    code: 'HOG-001',
+    code: '10002',
     name: 'Hogaza Centeno',
     family: 'Panadería',
     format: 'tray',
@@ -43,7 +43,7 @@ const SALE_ARTICLES: (Omit<CreateSaleArticleInput, 'familyId'> & { family: Famil
     price: 2.1,
   },
   {
-    code: 'NAP-001',
+    code: '20002',
     name: 'Napolitana de Crema',
     family: 'Bollería',
     format: 'tray',
@@ -51,7 +51,7 @@ const SALE_ARTICLES: (Omit<CreateSaleArticleInput, 'familyId'> & { family: Famil
     price: 1.2,
   },
   {
-    code: 'EMP-001',
+    code: '30001',
     name: 'Empanadilla de Atún',
     family: 'Salados',
     format: 'box',
@@ -83,8 +83,10 @@ try {
 
   for (const { family, ...input } of SALE_ARTICLES) {
     const data = createSaleArticleSchema.parse({ ...input, familyId: familyIds.get(family) })
+    // También por nombre: así un artículo de ejemplo sembrado con un código antiguo
+    // (p. ej. «BAR-001», antes de exigir 5 dígitos) se renombra en lugar de duplicarse.
     const result = await SaleArticleModel.updateOne(
-      { code: data.code },
+      { $or: [{ code: data.code }, { name: data.name }] },
       { $set: data },
       { upsert: true },
     )

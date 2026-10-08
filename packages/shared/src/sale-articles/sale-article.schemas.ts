@@ -4,9 +4,12 @@ import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { paginatedSchema, paginationQuerySchema } from '../common/pagination'
 import { packageFormatSchema } from './package-format'
 
+/** Código de artículo: exactamente 5 dígitos, conservando los ceros a la izquierda («00123»). */
+export const SALE_ARTICLE_CODE_PATTERN = /^\d{5}$/
+
 /** Campos editables de un artículo de venta del obrador. */
 const saleArticleFields = {
-  code: z.string().trim().min(1, 'El código es obligatorio').max(30),
+  code: z.string().trim().regex(SALE_ARTICLE_CODE_PATTERN, 'El código debe tener 5 dígitos numéricos'),
   name: z.string().trim().min(1, 'El nombre es obligatorio').max(120),
   format: packageFormatSchema,
   unitsPerFormat: z.number().int().positive('Debe ser mayor que 0'),
