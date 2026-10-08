@@ -1,0 +1,31 @@
+{
+  "name": "cocina-central",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Amoenus - Cocina Central: gestor de pedidos de tiendas al obrador",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "run-p -l dev:api dev:web",
+    "dev:api": "npm run dev -w @cocina-central/api",
+    "dev:web": "npm run dev -w @cocina-central/web",
+    "build": "npm run build --workspaces --if-present",
+    "type-check": "npm run type-check --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:up": "docker compose up -d mongo",
+    "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "npm-run-all2": "^9.0.3",
+    "prettier": "3.9.6"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  }
+}

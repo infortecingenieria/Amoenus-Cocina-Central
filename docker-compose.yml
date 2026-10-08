@@ -1,0 +1,22 @@
+# Infraestructura local de desarrollo. Arranca con `npm run db:up`.
+name: cocina-central
+
+services:
+  mongo:
+    image: mongo:9.0
+    container_name: cocina-central-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_DATABASE: cocina_central
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo-data:

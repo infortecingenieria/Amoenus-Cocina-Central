@@ -1,0 +1,9 @@
+<!-- Marcador provisional: sustituir por el logotipo oficial de ¡La Empanadera! (mismo nombre de fichero). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 150" role="img" aria-label="¡La Empanadera!">
+  <path d="M60 6c30 0 52 30 52 70s-22 68-52 68S8 116 8 76 30 6 60 6Z" fill="#facc15" stroke="#111" stroke-width="5" transform="rotate(-12 60 75)"/>
+  <g font-family="Inter, Arial, sans-serif" font-weight="900" fill="#111" text-anchor="middle" transform="rotate(-12 60 75)">
+    <text x="60" y="58" font-size="22">¡LA EM</text>
+    <text x="60" y="84" font-size="24">PANA</text>
+    <text x="60" y="110" font-size="22">DERA!</text>
+  </g>
+</svg>

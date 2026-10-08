@@ -1,0 +1,37 @@
+# Dependencias y builds
+node_modules
+dist
+dist-ssr
+coverage
+*.tsbuildinfo
+.eslintcache
+
+# Entorno (solo se versiona .env.example)
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+*.suo
+*.sw?
+
+# Vitest / Vite
+__screenshots__/
+*.timestamp-*-*.mjs
+
+# Herramientas locales de IA (no se versionan)
+CLAUDE.local.md
+.claude/
+graphify-out/
+.graphifyignore

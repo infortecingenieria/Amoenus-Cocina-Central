@@ -1,0 +1,49 @@
+{
+  "name": "@cocina-central/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API de Cocina Central (Fastify + MongoDB)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "build": "tsdown",
+    "start": "node dist/server.mjs",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --fix --cache",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cocina-central/shared": "0.1.0",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/swagger": "^9.9.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "fastify": "^5.12.5",
+    "fastify-type-provider-zod": "^7.0.0",
+    "mongoose": "^9.11.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^24.13.4",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "jiti": "^2.7.0",
+    "mongodb-memory-server": "^11.0.0",
+    "pino-pretty": "^13.2.0",
+    "tsdown": "^0.23.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "config": {
+    "mongodbMemoryServer": {
+      "version": "9.0.2"
+    }
+  }
+}

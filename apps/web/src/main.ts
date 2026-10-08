@@ -1,0 +1,18 @@
+import './assets/main.css'
+import 'vue-sonner/style.css'
+
+import { VueQueryPlugin } from '@tanstack/vue-query'
+import { createPinia } from 'pinia'
+import { createApp } from 'vue'
+
+import App from './App.vue'
+import { queryClient } from './lib/query-client'
+import router from './router'
+
+const app = createApp(App)
+
+app.use(createPinia())
+app.use(router)
+app.use(VueQueryPlugin, { queryClient })
+
+app.mount('#app')
