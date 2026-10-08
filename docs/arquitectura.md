@@ -54,15 +54,20 @@ Transversal:
 
 ## Modelo de datos (propuesta)
 
-Implementado: `sale_articles`. El resto es la propuesta para los siguientes módulos.
+Implementado: `families` y `sale_articles`. El resto es la propuesta para los siguientes módulos.
 
 ```
 stores (tiendas)
   _id, code, name, active, amoenusLocalId?            ← local equivalente en Amoenus Central
 
+families (familias de artículos de venta)             ✅ implementado
+  _id, name (único sin distinguir mayúsculas ni tildes), createdAt, updatedAt
+  No se puede borrar si tiene artículos asignados.
+
 sale_articles (artículos de venta del obrador)        ✅ implementado
-  _id, code (único), name, format (box|tray|bag|unit), unitsPerFormat, price,
-  imageUrl, active, amoenusSaleItemId? (único si existe), createdAt, updatedAt
+  _id, code (único), name, familyId? (→ families), format (box|tray|bag|unit),
+  unitsPerFormat, price, imageUrl, active, amoenusSaleItemId? (único si existe),
+  createdAt, updatedAt
 
 orders (pedidos tienda → obrador)
   _id, number ("PED-2026-0001", correlativo por año), storeId, status,

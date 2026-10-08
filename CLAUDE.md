@@ -16,7 +16,7 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 ## Estado actual (actualizar al avanzar)
 
 - Hecho: monorepo, layout/menú según los mockups, router con secciones provisionales, CRUD completo de
-  artículos de venta (API + web + tests).
+  artículos de venta y de sus familias (API + web + tests; familia opcional, filtro por familia).
 - Sin autenticación: el front usa usuarios de prueba (`apps/web/src/stores/session.ts`) con selector de rol
   en desarrollo.
 - Pendiente de decidir: integración con Amoenus Central y login (ver preguntas abiertas en

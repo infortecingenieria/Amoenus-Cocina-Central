@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/modules/sale-articles/views/SaleArticlesView.vue'),
         meta: { title: 'Artículos de venta', roles: ['kitchen_admin'] },
       },
+      {
+        path: 'familias',
+        name: 'families',
+        component: () => import('@/modules/families/views/FamiliesView.vue'),
+        meta: { title: 'Familias', roles: ['kitchen_admin'] },
+      },
     ],
   },
   {

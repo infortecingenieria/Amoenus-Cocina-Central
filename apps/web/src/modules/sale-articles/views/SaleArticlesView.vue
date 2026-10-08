@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   formatPackage,
+  NO_FAMILY,
   type ListSaleArticlesParams,
   type SaleArticle,
 } from '@cocina-central/shared'
@@ -20,7 +21,6 @@ import { toast } from 'vue-sonner'
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -51,6 +51,7 @@ import {
 } from '@/components/ui/table'
 import { getErrorMessage } from '@/lib/api-client'
 import { formatCurrency } from '@/lib/format'
+import { useFamilyOptions } from '@/modules/families/composables/useFamilies'
 
 import SaleArticleFormDialog from '../components/SaleArticleFormDialog.vue'
 import {
@@ -60,24 +61,30 @@ import {
 } from '../composables/useSaleArticles'
 
 const PAGE_SIZE = 20
-const COLUMNS = 7
+const COLUMNS = 8
+const ALL_FAMILIES = 'all'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
 const search = ref('')
 const debouncedSearch = refDebounced(search, 300)
 const status = ref<StatusFilter>('all')
+/** `ALL_FAMILIES`, `NO_FAMILY` o el id de una familia. */
+const family = ref<string>(ALL_FAMILIES)
 const page = ref(1)
 
-watch([debouncedSearch, status], () => {
+watch([debouncedSearch, status, family], () => {
   page.value = 1
 })
+
+const { data: families } = useFamilyOptions()
 
 const params = computed<ListSaleArticlesParams>(() => ({
   page: page.value,
   pageSize: PAGE_SIZE,
   search: debouncedSearch.value.trim() || undefined,
   active: status.value === 'all' ? undefined : status.value === 'active',
+  familyId: family.value === ALL_FAMILIES ? undefined : family.value,
 }))
 
 const { data, isPending, isError, error, refetch } = useSaleArticleList(params)
@@ -165,6 +172,18 @@ async function confirmDelete() {
           <SelectItem value="inactive">Inactivos</SelectItem>
         </SelectContent>
       </Select>
+      <Select v-model="family">
+        <SelectTrigger class="w-52" aria-label="Filtrar por familia">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem :value="ALL_FAMILIES">Todas las familias</SelectItem>
+          <SelectItem :value="NO_FAMILY">Sin familia</SelectItem>
+          <SelectItem v-for="option in families" :key="option.id" :value="option.id">
+            {{ option.name }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
     </div>
 
     <div class="overflow-hidden rounded-xl border">
@@ -174,6 +193,7 @@ async function confirmDelete() {
             <TableHead class="w-16" />
             <TableHead>Código</TableHead>
             <TableHead>Nombre</TableHead>
+            <TableHead>Familia</TableHead>
             <TableHead>Formato</TableHead>
             <TableHead class="text-right">Precio</TableHead>
             <TableHead>Activo</TableHead>
@@ -223,6 +243,10 @@ async function confirmDelete() {
                   aria-label="Vinculado con Amoenus Central"
                 />
               </div>
+            </TableCell>
+            <TableCell>
+              <span v-if="article.familyName">{{ article.familyName }}</span>
+              <span v-else class="text-muted-foreground">Sin familia</span>
             </TableCell>
             <TableCell>
               <Badge variant="secondary">{{
@@ -294,13 +318,15 @@ async function confirmDelete() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deleteMutation.isPending.value">Cancelar</AlertDialogCancel>
-          <AlertDialogAction
+          <!-- Button y no AlertDialogAction: este cierra el diálogo (y limpia `deleting`) antes de
+               que se ejecute `confirmDelete`. -->
+          <Button
             class="bg-destructive text-white hover:bg-destructive/90"
             :disabled="deleteMutation.isPending.value"
-            @click.prevent="confirmDelete"
+            @click="confirmDelete"
           >
             Eliminar
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

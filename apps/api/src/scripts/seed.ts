@@ -1,17 +1,27 @@
 /**
  * Datos iniciales para desarrollo local: `pnpm db:seed` (desde la raíz).
- * Es idempotente: crea o actualiza por código, nunca duplica ni borra otros datos.
+ * Es idempotente: crea o actualiza por nombre (familias) y por código (artículos), nunca duplica
+ * ni borra otros datos.
  */
-import { createSaleArticleSchema, type CreateSaleArticleInput } from '@cocina-central/shared'
+import {
+  createFamilySchema,
+  createSaleArticleSchema,
+  type CreateSaleArticleInput,
+} from '@cocina-central/shared'
 import mongoose from 'mongoose'
 
 import { loadConfig } from '../config/env'
+import { FAMILY_NAME_COLLATION, FamilyModel } from '../modules/families/family.model'
 import { SaleArticleModel } from '../modules/sale-articles/sale-article.model'
 
-const SALE_ARTICLES: CreateSaleArticleInput[] = [
+const FAMILIES = ['Panadería', 'Bollería', 'Salados'] as const
+type FamilyName = (typeof FAMILIES)[number]
+
+const SALE_ARTICLES: (Omit<CreateSaleArticleInput, 'familyId'> & { family: FamilyName })[] = [
   {
     code: 'BAR-001',
     name: 'Barra Rústica Tradicional',
+    family: 'Panadería',
     format: 'tray',
     unitsPerFormat: 12,
     price: 1.45,
@@ -19,13 +29,35 @@ const SALE_ARTICLES: CreateSaleArticleInput[] = [
   {
     code: 'CRO-001',
     name: 'Croissant Mantequilla',
+    family: 'Bollería',
     format: 'box',
     unitsPerFormat: 30,
     price: 0.85,
   },
-  { code: 'HOG-001', name: 'Hogaza Centeno', format: 'tray', unitsPerFormat: 12, price: 2.1 },
-  { code: 'NAP-001', name: 'Napolitana de Crema', format: 'tray', unitsPerFormat: 12, price: 1.2 },
-  { code: 'EMP-001', name: 'Empanadilla de Atún', format: 'box', unitsPerFormat: 30, price: 0.95 },
+  {
+    code: 'HOG-001',
+    name: 'Hogaza Centeno',
+    family: 'Panadería',
+    format: 'tray',
+    unitsPerFormat: 12,
+    price: 2.1,
+  },
+  {
+    code: 'NAP-001',
+    name: 'Napolitana de Crema',
+    family: 'Bollería',
+    format: 'tray',
+    unitsPerFormat: 12,
+    price: 1.2,
+  },
+  {
+    code: 'EMP-001',
+    name: 'Empanadilla de Atún',
+    family: 'Salados',
+    format: 'box',
+    unitsPerFormat: 30,
+    price: 0.95,
+  },
 ]
 
 const config = loadConfig()
@@ -35,9 +67,22 @@ if (config.nodeEnv === 'production') {
 
 await mongoose.connect(config.mongodbUri)
 try {
-  await SaleArticleModel.init()
-  for (const input of SALE_ARTICLES) {
-    const data = createSaleArticleSchema.parse(input)
+  await Promise.all([FamilyModel.init(), SaleArticleModel.init()])
+
+  const familyIds = new Map<FamilyName, string>()
+  for (const name of FAMILIES) {
+    const data = createFamilySchema.parse({ name })
+    const family = await FamilyModel.findOneAndUpdate(
+      { name: data.name },
+      { $set: data },
+      { upsert: true, returnDocument: 'after', collation: FAMILY_NAME_COLLATION },
+    ).lean()
+    familyIds.set(name, family._id.toString())
+    console.log(`familia     ${data.name}`)
+  }
+
+  for (const { family, ...input } of SALE_ARTICLES) {
+    const data = createSaleArticleSchema.parse({ ...input, familyId: familyIds.get(family) })
     const result = await SaleArticleModel.updateOne(
       { code: data.code },
       { $set: data },

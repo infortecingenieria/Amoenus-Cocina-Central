@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   createSaleArticleSchema,
+  NO_FAMILY,
   PACKAGE_FORMAT_LABELS,
   PACKAGE_FORMATS,
   type PackageFormat,
@@ -37,6 +38,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ApiError, getErrorMessage } from '@/lib/api-client'
+import { useFamilyOptions } from '@/modules/families/composables/useFamilies'
 
 import { useCreateSaleArticle, useUpdateSaleArticle } from '../composables/useSaleArticles'
 
@@ -52,6 +54,8 @@ interface FormState {
   format: PackageFormat
   unitsPerFormat: number
   price: number
+  /** Id de la familia o `NO_FAMILY`: el Select no admite `''` como valor. */
+  familyId: string
   imageUrl: string
   amoenusSaleItemId: string
   active: boolean
@@ -64,6 +68,7 @@ const emptyForm = (): FormState => ({
   format: 'tray',
   unitsPerFormat: 12,
   price: 0,
+  familyId: NO_FAMILY,
   imageUrl: '',
   amoenusSaleItemId: '',
   active: true,
@@ -75,6 +80,7 @@ const toForm = (article: SaleArticle): FormState => ({
   format: article.format,
   unitsPerFormat: article.unitsPerFormat,
   price: article.price,
+  familyId: article.familyId ?? NO_FAMILY,
   imageUrl: article.imageUrl ?? '',
   amoenusSaleItemId: article.amoenusSaleItemId ?? '',
   active: article.active,
@@ -89,6 +95,8 @@ watch(open, (isOpen) => {
   errors.value = {}
 })
 
+const { data: families } = useFamilyOptions()
+
 const isEditing = computed(() => props.article !== null)
 const createMutation = useCreateSaleArticle()
 const updateMutation = useUpdateSaleArticle()
@@ -97,6 +105,7 @@ const isSaving = computed(() => createMutation.isPending.value || updateMutation
 async function submit() {
   const parsed = createSaleArticleSchema.safeParse({
     ...form,
+    familyId: form.familyId === NO_FAMILY ? null : form.familyId,
     imageUrl: form.imageUrl.trim() || null,
     amoenusSaleItemId: form.amoenusSaleItemId.trim() || null,
   })
@@ -154,6 +163,22 @@ async function submit() {
               <FieldError :errors="errors.name" />
             </Field>
           </div>
+
+          <Field :data-invalid="!!errors.familyId">
+            <FieldLabel for="familyId">Familia</FieldLabel>
+            <Select v-model="form.familyId">
+              <SelectTrigger id="familyId" class="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="NO_FAMILY">Sin familia</SelectItem>
+                <SelectItem v-for="family in families" :key="family.id" :value="family.id">
+                  {{ family.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <FieldError :errors="errors.familyId" />
+          </Field>
 
           <div class="grid grid-cols-3 gap-4">
             <Field :data-invalid="!!errors.format">

@@ -9,6 +9,7 @@ import {
 } from 'fastify-type-provider-zod'
 
 import type { AppConfig } from './config/env'
+import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
 import { registerErrorHandler } from './plugins/error-handler'
@@ -33,6 +34,7 @@ const buildLogger = ({ nodeEnv, logLevel }: AppOptions): FastifyServerOptions['l
 /** Rutas de negocio versionadas. Cada módulo nuevo se registra aquí con su prefijo. */
 const apiV1Routes: FastifyPluginAsyncZod = async (app) => {
   await app.register(saleArticleRoutes, { prefix: '/sale-articles' })
+  await app.register(familyRoutes, { prefix: '/families' })
 }
 
 /**

@@ -1,6 +1,7 @@
 import type {
   ApiErrorBody,
   CreateSaleArticleInput,
+  Family,
   Paginated,
   SaleArticle,
 } from '@cocina-central/shared'
@@ -34,6 +35,11 @@ describe('API /sale-articles', () => {
   const create = (payload: CreateSaleArticleInput) =>
     ctx.app.inject({ method: 'POST', url: baseUrl, payload })
 
+  const createFamily = async (name: string) =>
+    (
+      await ctx.app.inject({ method: 'POST', url: '/api/v1/families', payload: { name } })
+    ).json<Family>()
+
   it('crea un artículo aplicando los valores por defecto', async () => {
     const response = await create(barra)
 
@@ -42,10 +48,79 @@ describe('API /sale-articles', () => {
     expect(article).toMatchObject({
       ...barra,
       active: true,
+      familyId: null,
+      familyName: null,
       imageUrl: null,
       amoenusSaleItemId: null,
     })
     expect(article.id).toMatch(/^[a-f\d]{24}$/)
+  })
+
+  it('devuelve el nombre de la familia asignada', async () => {
+    const panaderia = await createFamily('Panadería')
+
+    const created = await create({ ...barra, familyId: panaderia.id })
+    expect(created.statusCode).toBe(201)
+    expect(created.json<SaleArticle>()).toMatchObject({
+      familyId: panaderia.id,
+      familyName: 'Panadería',
+    })
+
+    const fetched = await ctx.app.inject({ url: `${baseUrl}/${created.json<SaleArticle>().id}` })
+    expect(fetched.json<SaleArticle>().familyName).toBe('Panadería')
+  })
+
+  it('rechaza una familia inexistente con VALIDATION_ERROR', async () => {
+    const response = await create({ ...barra, familyId: '64b7f0c2a1b2c3d4e5f60718' })
+
+    expect(response.statusCode).toBe(400)
+    const body = response.json<ApiErrorBody>()
+    expect(body.code).toBe('VALIDATION_ERROR')
+    expect(body.details).toEqual([expect.objectContaining({ path: '/familyId' })])
+  })
+
+  it('permite cambiar y quitar la familia de un artículo', async () => {
+    const panaderia = await createFamily('Panadería')
+    const bolleria = await createFamily('Bollería')
+    const created = (await create({ ...barra, familyId: panaderia.id })).json<SaleArticle>()
+    const patch = (payload: object) =>
+      ctx.app.inject({ method: 'PATCH', url: `${baseUrl}/${created.id}`, payload })
+
+    expect((await patch({ familyId: bolleria.id })).json<SaleArticle>()).toMatchObject({
+      familyId: bolleria.id,
+      familyName: 'Bollería',
+    })
+    expect((await patch({ familyId: null })).json<SaleArticle>()).toMatchObject({
+      familyId: null,
+      familyName: null,
+    })
+  })
+
+  it('filtra por familia y por artículos sin familia', async () => {
+    const panaderia = await createFamily('Panadería')
+    await create({ ...barra, familyId: panaderia.id })
+    await create({ ...barra, code: 'HOG-001', name: 'Hogaza Centeno', familyId: panaderia.id })
+    await create({
+      code: 'CRO-001',
+      name: 'Croissant Mantequilla',
+      format: 'box',
+      unitsPerFormat: 30,
+      price: 0.9,
+    })
+
+    const byFamily = await ctx.app.inject({ url: `${baseUrl}?familyId=${panaderia.id}` })
+    expect(byFamily.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual([
+      'BAR-001',
+      'HOG-001',
+    ])
+
+    const withoutFamily = await ctx.app.inject({ url: `${baseUrl}?familyId=none` })
+    expect(withoutFamily.json<Paginated<SaleArticle>>().items.map((a) => a.code)).toEqual([
+      'CRO-001',
+    ])
+
+    const invalid = await ctx.app.inject({ url: `${baseUrl}?familyId=otra` })
+    expect(invalid.statusCode).toBe(400)
   })
 
   it('rechaza un cuerpo no válido con VALIDATION_ERROR', async () => {

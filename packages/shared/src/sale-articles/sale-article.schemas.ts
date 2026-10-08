@@ -12,6 +12,8 @@ const saleArticleFields = {
   unitsPerFormat: z.number().int().positive('Debe ser mayor que 0'),
   /** Precio por formato (la unidad en la que pide la tienda), en euros. */
   price: z.number().nonnegative('El precio no puede ser negativo'),
+  /** Familia a la que pertenece. Opcional. */
+  familyId: objectIdSchema.nullable(),
   imageUrl: z.url('URL no válida').nullable(),
   active: z.boolean(),
   /** `_id` del artículo de venta equivalente en Amoenus Central, si está vinculado. */
@@ -22,6 +24,7 @@ const saleArticleFields = {
 // valor por defecto y un PATCH parcial sobrescribiría campos que no se han enviado.
 export const createSaleArticleSchema = z.object({
   ...saleArticleFields,
+  familyId: saleArticleFields.familyId.default(null),
   imageUrl: saleArticleFields.imageUrl.default(null),
   active: saleArticleFields.active.default(true),
   amoenusSaleItemId: saleArticleFields.amoenusSaleItemId.default(null),
@@ -35,10 +38,15 @@ export type UpdateSaleArticleInput = z.infer<typeof updateSaleArticleSchema>
 export const saleArticleSchema = z.object({
   id: objectIdSchema,
   ...saleArticleFields,
+  /** Nombre de la familia (`familyId`), resuelto por la API para mostrarlo en listados. */
+  familyName: z.string().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 })
 export type SaleArticle = z.infer<typeof saleArticleSchema>
+
+/** Valor del filtro `familyId` para listar los artículos sin familia. */
+export const NO_FAMILY = 'none'
 
 export const listSaleArticlesQuerySchema = paginationQuerySchema.extend({
   /** Busca por código o nombre. */
@@ -47,6 +55,8 @@ export const listSaleArticlesQuerySchema = paginationQuerySchema.extend({
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .optional(),
+  /** `_id` de una familia, o `NO_FAMILY` para los artículos sin familia. */
+  familyId: z.union([objectIdSchema, z.literal(NO_FAMILY)]).optional(),
 })
 export type ListSaleArticlesQuery = z.output<typeof listSaleArticlesQuerySchema>
 
@@ -56,6 +66,7 @@ export interface ListSaleArticlesParams {
   pageSize?: number
   search?: string
   active?: boolean
+  familyId?: string
 }
 
 export const saleArticleListSchema = paginatedSchema(saleArticleSchema)

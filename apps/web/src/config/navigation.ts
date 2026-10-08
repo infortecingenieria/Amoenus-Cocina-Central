@@ -3,6 +3,7 @@ import {
   CircleAlertIcon,
   ClipboardListIcon,
   CroissantIcon,
+  FolderTreeIcon,
   HistoryIcon,
   ShoppingCartIcon,
   TruckIcon,
@@ -24,4 +25,5 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Entregas', route: 'deliveries', icon: TruckIcon },
   { label: 'Incidencias', route: 'incidents', icon: CircleAlertIcon },
   { label: 'Artículos', route: 'sale-articles', icon: CroissantIcon, roles: ['kitchen_admin'] },
+  { label: 'Familias', route: 'families', icon: FolderTreeIcon, roles: ['kitchen_admin'] },
 ]

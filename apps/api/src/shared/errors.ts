@@ -24,6 +24,19 @@ export class AppError extends Error {
   }
 }
 
+/** Detalle de un campo no válido, con el mismo formato que los errores de validación de Zod. */
+export interface ValidationIssue {
+  path: string
+  message: string
+}
+
+/** Datos sintácticamente correctos pero rechazados por una regla de negocio (p. ej. una referencia inexistente). */
+export class ValidationError extends AppError {
+  constructor(message: string, details?: ValidationIssue[]) {
+    super(400, 'VALIDATION_ERROR', message, details)
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(message = 'Recurso no encontrado') {
     super(404, 'NOT_FOUND', message)

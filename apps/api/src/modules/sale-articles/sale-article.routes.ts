@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 
+import { FamilyRepository } from '../families/family.repository'
 import { SaleArticleController } from './sale-article.controller'
 import { SaleArticleRepository } from './sale-article.repository'
 import {
@@ -12,7 +13,9 @@ import {
 import { SaleArticleService } from './sale-article.service'
 
 export const saleArticleRoutes: FastifyPluginAsyncZod = async (app) => {
-  const controller = new SaleArticleController(new SaleArticleService(new SaleArticleRepository()))
+  const controller = new SaleArticleController(
+    new SaleArticleService(new SaleArticleRepository(), new FamilyRepository()),
+  )
 
   app.get('/', { schema: listSaleArticlesRoute }, controller.list)
   app.get('/:id', { schema: getSaleArticleRoute }, controller.getById)
