@@ -1,12 +1,9 @@
 import type { UserRole } from '@cocina-central/shared'
 import {
-  CircleAlertIcon,
   ClipboardListIcon,
   CroissantIcon,
   FolderTreeIcon,
-  HistoryIcon,
   ShoppingCartIcon,
-  TruckIcon,
   WrenchIcon,
 } from '@lucide/vue'
 import type { Component } from 'vue'
@@ -36,9 +33,6 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     items: [
       { label: 'Nuevo Pedido', route: 'new-order', icon: ShoppingCartIcon, roles: ['store'] },
       { label: 'Solicitudes', route: 'requests', icon: ClipboardListIcon },
-      { label: 'Historial', route: 'history', icon: HistoryIcon },
-      { label: 'Entregas', route: 'deliveries', icon: TruckIcon },
-      { label: 'Incidencias', route: 'incidents', icon: CircleAlertIcon },
     ],
   },
   {

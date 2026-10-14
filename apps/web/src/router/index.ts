@@ -7,16 +7,12 @@ import { useSessionStore } from '@/stores/session'
 declare module 'vue-router' {
   interface RouteMeta {
     title?: string
-    /** Texto que muestra la pantalla provisional mientras la sección no está desarrollada. */
-    description?: string
     /** Roles con acceso. Sin definir = cualquier usuario autenticado. */
     roles?: readonly UserRole[]
     /** Accesible sin iniciar sesión (solo el login). */
     public?: boolean
   }
 }
-
-const ComingSoonView = () => import('@/views/ComingSoonView.vue')
 
 const routes: RouteRecordRaw[] = [
   {
@@ -51,24 +47,6 @@ const routes: RouteRecordRaw[] = [
         name: 'request-detail',
         component: () => import('@/modules/orders/views/OrderDetailView.vue'),
         meta: { title: 'Detalle de pedido' },
-      },
-      {
-        path: 'historial',
-        name: 'history',
-        component: ComingSoonView,
-        meta: { title: 'Historial' },
-      },
-      {
-        path: 'entregas',
-        name: 'deliveries',
-        component: ComingSoonView,
-        meta: { title: 'Entregas' },
-      },
-      {
-        path: 'incidencias',
-        name: 'incidents',
-        component: ComingSoonView,
-        meta: { title: 'Incidencias' },
       },
       {
         path: 'articulos',

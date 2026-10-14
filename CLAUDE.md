@@ -15,7 +15,7 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 
 ## Estado actual (actualizar al avanzar)
 
-- Hecho: monorepo, layout/menú según los mockups, router con secciones provisionales, CRUD completo de
+- Hecho: monorepo, layout/menú según los mockups, CRUD completo de
   artículos de venta y de sus familias (API + web + tests; familia opcional, filtro por familia).
 - Login propio con usuario y contraseña (colección `users`, JWT en `Authorization: Bearer`). Toda la
   API salvo `/auth/login` y `/health` exige sesión; las escrituras usan `app.requireRole(...)`.
@@ -26,6 +26,7 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   multiestado, orden por fecha de creación, Aprobar/Editar por fila) y ficha con aprobación (ajustando
   cantidades → `modified`), rechazo con motivo y cancelación por la tienda. Sin módulo `stores` aún:
   el pedido guarda el `storeName` del usuario.
+- Descartado: las pantallas Historial, Entregas e Incidencias no forman parte de la aplicación.
 - Siguiente: módulo `stores`, preparación/entrega y albarán PDF.
 
 ## Reglas de código
