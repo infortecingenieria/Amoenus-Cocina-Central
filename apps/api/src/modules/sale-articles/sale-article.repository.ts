@@ -34,7 +34,6 @@ const toSaleArticle = (record: PopulatedSaleArticleRecord): SaleArticle => ({
   price: record.price,
   familyId: record.familyId?._id.toString() ?? null,
   familyName: record.familyId?.name ?? null,
-  imageUrl: record.imageUrl,
   active: record.active,
   createdAt: record.createdAt.toISOString(),
   updatedAt: record.updatedAt.toISOString(),

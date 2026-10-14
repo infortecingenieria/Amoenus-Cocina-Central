@@ -9,7 +9,6 @@ export interface SaleArticleRecord {
   unitsPerFormat: number
   price: number
   familyId: Types.ObjectId | null
-  imageUrl: string | null
   active: boolean
   createdAt: Date
   updatedAt: Date
@@ -23,7 +22,6 @@ const saleArticleSchema = new Schema<SaleArticleRecord>(
     unitsPerFormat: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
     familyId: { type: Schema.Types.ObjectId, ref: 'Family', default: null },
-    imageUrl: { type: String, default: null },
     active: { type: Boolean, default: true },
   },
   { collection: 'sale_articles', timestamps: true },

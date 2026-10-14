@@ -17,7 +17,6 @@ const saleArticleFields = {
   price: z.number().nonnegative('El precio no puede ser negativo'),
   /** Familia a la que pertenece. Opcional. */
   familyId: objectIdSchema.nullable(),
-  imageUrl: z.url('URL no válida').nullable(),
   active: z.boolean(),
 }
 
@@ -26,7 +25,6 @@ const saleArticleFields = {
 export const createSaleArticleSchema = z.object({
   ...saleArticleFields,
   familyId: saleArticleFields.familyId.default(null),
-  imageUrl: saleArticleFields.imageUrl.default(null),
   active: saleArticleFields.active.default(true),
 })
 export type CreateSaleArticleInput = z.input<typeof createSaleArticleSchema>

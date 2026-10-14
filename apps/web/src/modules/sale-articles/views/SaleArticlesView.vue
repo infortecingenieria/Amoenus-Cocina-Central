@@ -8,7 +8,6 @@ import {
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  CroissantIcon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
@@ -55,7 +54,7 @@ import SaleArticleFormDialog from '../components/SaleArticleFormDialog.vue'
 import { useDeleteSaleArticle, useSaleArticleList } from '../composables/useSaleArticles'
 
 const PAGE_SIZE = 20
-const COLUMNS = 7
+const COLUMNS = 6
 const ALL_FAMILIES = 'all'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
@@ -171,7 +170,6 @@ async function confirmDelete() {
       <Table>
         <TableHeader>
           <TableRow class="bg-muted/50">
-            <TableHead class="w-16" />
             <TableHead>Código</TableHead>
             <TableHead>Nombre</TableHead>
             <TableHead>Familia</TableHead>
@@ -202,17 +200,6 @@ async function confirmDelete() {
           </TableEmpty>
 
           <TableRow v-for="article in data?.items" v-else :key="article.id">
-            <TableCell>
-              <img
-                v-if="article.imageUrl"
-                :src="article.imageUrl"
-                :alt="article.name"
-                class="size-10 rounded-md object-cover"
-              />
-              <div v-else class="flex size-10 items-center justify-center rounded-md bg-muted">
-                <CroissantIcon class="size-5 text-muted-foreground" />
-              </div>
-            </TableCell>
             <TableCell class="font-mono text-sm">{{ article.code }}</TableCell>
             <TableCell>
               <span class="font-medium">{{ article.name }}</span>

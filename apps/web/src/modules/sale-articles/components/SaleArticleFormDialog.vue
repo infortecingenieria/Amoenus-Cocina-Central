@@ -56,7 +56,6 @@ interface FormState {
   price: number
   /** Id de la familia o `NO_FAMILY`: el Select no admite `''` como valor. */
   familyId: string
-  imageUrl: string
   active: boolean
 }
 type FormErrors = Partial<Record<keyof FormState, string[]>>
@@ -68,7 +67,6 @@ const emptyForm = (): FormState => ({
   unitsPerFormat: 12,
   price: 0,
   familyId: NO_FAMILY,
-  imageUrl: '',
   active: true,
 })
 
@@ -79,7 +77,6 @@ const toForm = (article: SaleArticle): FormState => ({
   unitsPerFormat: article.unitsPerFormat,
   price: article.price,
   familyId: article.familyId ?? NO_FAMILY,
-  imageUrl: article.imageUrl ?? '',
   active: article.active,
 })
 
@@ -103,7 +100,6 @@ async function submit() {
   const parsed = createSaleArticleSchema.safeParse({
     ...form,
     familyId: form.familyId === NO_FAMILY ? null : form.familyId,
-    imageUrl: form.imageUrl.trim() || null,
   })
   if (!parsed.success) {
     errors.value = z.flattenError(parsed.error).fieldErrors
@@ -221,12 +217,6 @@ async function submit() {
               <FieldError :errors="errors.price" />
             </Field>
           </div>
-
-          <Field :data-invalid="!!errors.imageUrl">
-            <FieldLabel for="imageUrl">URL de la imagen</FieldLabel>
-            <Input id="imageUrl" v-model="form.imageUrl" type="url" placeholder="https://…" />
-            <FieldError :errors="errors.imageUrl" />
-          </Field>
 
           <Field orientation="horizontal">
             <Switch id="active" v-model="form.active" />

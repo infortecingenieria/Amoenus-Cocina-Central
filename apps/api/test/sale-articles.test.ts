@@ -55,7 +55,6 @@ describe('API /sale-articles', () => {
       active: true,
       familyId: null,
       familyName: null,
-      imageUrl: null,
     })
     expect(article.id).toMatch(/^[a-f\d]{24}$/)
   })

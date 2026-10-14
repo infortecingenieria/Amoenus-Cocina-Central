@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { formatPackage, NO_FAMILY, type ListSaleArticlesParams } from '@cocina-central/shared'
-import { ChevronLeftIcon, ChevronRightIcon, CroissantIcon, PlusIcon, SearchIcon } from '@lucide/vue'
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@lucide/vue'
 import { refDebounced } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 
@@ -121,16 +121,6 @@ const rangeLabel = computed(() => {
             )
           "
         >
-          <img
-            v-if="article.imageUrl"
-            :src="article.imageUrl"
-            :alt="article.name"
-            class="size-16 shrink-0 rounded-lg object-cover"
-          />
-          <div v-else class="flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <CroissantIcon class="size-6 text-muted-foreground" />
-          </div>
-
           <div class="flex min-w-0 flex-1 flex-col gap-2">
             <div class="min-w-0">
               <p class="truncate font-medium" :title="article.name">{{ article.name }}</p>
