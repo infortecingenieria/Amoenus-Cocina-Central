@@ -4,7 +4,7 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { z } from 'zod'
 
-import logoUrl from '@/assets/brand/logo-la-empanadera.svg'
+import logoUrl from '@/assets/brand/logo-la-empanadera.png'
 import { Button } from '@/components/ui/button'
 import {
   Card,

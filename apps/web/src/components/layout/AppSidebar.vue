@@ -3,7 +3,7 @@ import { ChevronDownIcon, LogOutIcon } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import logoUrl from '@/assets/brand/logo-la-empanadera.svg'
+import logoUrl from '@/assets/brand/logo-la-empanadera.png'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { NAV_SECTIONS } from '@/config/navigation'
