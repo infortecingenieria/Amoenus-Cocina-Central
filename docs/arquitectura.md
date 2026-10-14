@@ -114,6 +114,8 @@ pending ──► approved ──► in_preparation ──► delivered
   `pending`. El obrador (`kitchen_admin`) ve todos y los aprueba o rechaza (motivo obligatorio).
 - `modified` = aprobado con cantidades distintas a las pedidas (rotura de stock, mermas, capacidad
   de horneada). Al aprobar, las líneas que no se indican se sirven tal cual se pidieron.
+- Aprobar con cambios exige motivo, igual que rechazar; se guarda en `statusHistory` y la tienda lo
+  ve destacado en la ficha del pedido. En la web, aprobar y rechazar siempre piden confirmación.
 - Los cambios de estado se hacen con `findOneAndUpdate` filtrando por el estado de origen: si dos
   personas validan a la vez, la segunda recibe 409 `INVALID_STATE` en lugar de pisar el cambio.
 - Un artículo que ya aparece en algún pedido no se puede borrar (solo desactivar).

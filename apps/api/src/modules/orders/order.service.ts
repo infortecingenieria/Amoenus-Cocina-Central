@@ -97,7 +97,8 @@ export class OrderService {
 
   /**
    * Aprueba el pedido con las cantidades confirmadas. Las líneas que no se indican se sirven
-   * tal cual se pidieron; si alguna cambia, el pedido queda «modificado por obrador».
+   * tal cual se pidieron; si alguna cambia, el pedido queda «modificado por obrador» y hay que
+   * indicar el motivo (la tienda lo ve, como el de un rechazo).
    */
   async approve(id: string, data: ApproveOrderInput, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
@@ -125,10 +126,14 @@ export class OrderService {
       throw new ValidationError('Para no servir ningún artículo, rechaza el pedido')
     }
 
-    const status = lines.some((line) => line.confirmedQty !== line.requestedQty)
-      ? 'modified'
-      : 'approved'
-    return this.applyTransition(order, status, user, { lines })
+    if (lines.some((line) => line.confirmedQty !== line.requestedQty)) {
+      if (!data.reason) {
+        const message = 'Indica el motivo de los cambios'
+        throw new ValidationError(message, [{ path: '/reason', message }])
+      }
+      return this.applyTransition(order, 'modified', user, { lines, reason: data.reason })
+    }
+    return this.applyTransition(order, 'approved', user, { lines })
   }
 
   async reject(id: string, { reason }: RejectOrderInput, user: AuthUser): Promise<Order> {

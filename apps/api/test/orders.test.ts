@@ -270,7 +270,10 @@ describe('API /orders', () => {
       await asAdmin({
         method: 'POST',
         url: `${baseUrl}/${order.id}/approve`,
-        payload: { lines: [{ saleArticleId: articles.barra.id, confirmedQty: 1 }] },
+        payload: {
+          lines: [{ saleArticleId: articles.barra.id, confirmedQty: 1 }],
+          reason: 'Rotura de stock',
+        },
       })
 
       const [summary] = (await asAdmin({ url: baseUrl })).json<Paginated<OrderSummary>>().items
@@ -292,21 +295,44 @@ describe('API /orders', () => {
       expect(approved.status).toBe('approved')
       expect(approved.lines.map((line) => line.confirmedQty)).toEqual([3, 2])
       expect(approved.statusHistory.map((entry) => entry.status)).toEqual(['pending', 'approved'])
+      expect(approved.statusHistory.at(-1)?.reason).toBeNull()
     })
 
-    it('aprobar con otras cantidades deja el pedido modificado y recalcula el total', async () => {
+    it('aprobar con otras cantidades deja el pedido modificado, con su motivo y el total recalculado', async () => {
       const order = await createOrder()
 
       const response = await asAdmin({
         method: 'POST',
         url: `${baseUrl}/${order.id}/approve`,
-        payload: { lines: [{ saleArticleId: articles.croissant.id, confirmedQty: 0 }] },
+        payload: {
+          lines: [{ saleArticleId: articles.croissant.id, confirmedQty: 0 }],
+          reason: 'No quedan croissants',
+        },
       })
       expect(response.statusCode).toBe(200)
       const modified = response.json<Order>()
       expect(modified.status).toBe('modified')
       expect(modified.lines.map((line) => line.confirmedQty)).toEqual([3, 0])
       expect(modified.total).toBe(4.35)
+      expect(modified.statusHistory.at(-1)).toMatchObject({
+        status: 'modified',
+        reason: 'No quedan croissants',
+      })
+    })
+
+    it('aprobar con cambios exige motivo', async () => {
+      const order = await createOrder()
+      const url = `${baseUrl}/${order.id}/approve`
+      const lines = [{ saleArticleId: articles.croissant.id, confirmedQty: 1 }]
+
+      for (const payload of [{ lines }, { lines, reason: '   ' }]) {
+        const response = await asAdmin({ method: 'POST', url, payload })
+        expect(response.statusCode).toBe(400)
+        expect(response.json<ApiErrorBody>().code).toBe('VALIDATION_ERROR')
+      }
+
+      const stored = (await asAdmin({ url: `${baseUrl}/${order.id}` })).json<Order>()
+      expect(stored.status).toBe('pending')
     })
 
     it('no aprueba sin servir nada ni con líneas que no son del pedido', async () => {

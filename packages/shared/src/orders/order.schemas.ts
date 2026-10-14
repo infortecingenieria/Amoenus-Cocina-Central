@@ -10,6 +10,9 @@ export const MAX_ORDER_LINE_QUANTITY = 9999
 
 const notesSchema = z.string().trim().max(500, 'Máximo 500 caracteres').nullable()
 
+/** Motivo de un rechazo o de una aprobación con cambios: la tienda lo ve en el pedido. */
+const reasonSchema = z.string().trim().min(1, 'Indica el motivo').max(500, 'Máximo 500 caracteres')
+
 const quantitySchema = z
   .number()
   .int('Debe ser un número entero')
@@ -58,19 +61,16 @@ export const approveOrderLineSchema = z.object({
 
 /**
  * Las líneas que no se envían se aprueban con la cantidad pedida. Si alguna cantidad cambia, el
- * pedido queda `modified` en lugar de `approved`.
+ * pedido queda `modified` en lugar de `approved` y el motivo es obligatorio.
  */
 export const approveOrderSchema = z.object({
   lines: z.array(approveOrderLineSchema).superRefine(uniqueArticles).optional(),
+  reason: reasonSchema.optional(),
 })
 export type ApproveOrderInput = z.infer<typeof approveOrderSchema>
 
 export const rejectOrderSchema = z.object({
-  reason: z
-    .string()
-    .trim()
-    .min(1, 'Indica el motivo del rechazo')
-    .max(500, 'Máximo 500 caracteres'),
+  reason: reasonSchema,
 })
 export type RejectOrderInput = z.infer<typeof rejectOrderSchema>
 

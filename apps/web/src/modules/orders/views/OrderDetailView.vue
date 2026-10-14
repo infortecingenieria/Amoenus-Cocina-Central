@@ -3,7 +3,6 @@ import {
   calculateOrderTotal,
   formatPackage,
   isEditableByStore,
-  ORDER_STATUS_LABELS,
   orderLineTotal,
   type Order,
 } from '@cocina-central/shared'
@@ -38,10 +37,11 @@ import { formatCurrency, formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 
+import ApproveOrderDialog from '../components/ApproveOrderDialog.vue'
 import OrderQuantityField from '../components/OrderQuantityField.vue'
 import OrderStatusBadge from '../components/OrderStatusBadge.vue'
 import RejectOrderDialog from '../components/RejectOrderDialog.vue'
-import { useApproveOrder, useCancelOrder, useOrder } from '../composables/useOrders'
+import { useCancelOrder, useOrder } from '../composables/useOrders'
 import { showOrderError } from '../order-errors'
 
 const route = useRoute()
@@ -89,31 +89,21 @@ const hasChanges = computed(() =>
 )
 const servesNothing = computed(() => lines.value.every((line) => line.confirmedQty === 0))
 
-const rejection = computed(() =>
-  order.value?.status === 'rejected' ? order.value.statusHistory.at(-1) : undefined,
-)
-
-// Aprobar
-const approveMutation = useApproveOrder()
-
-async function approve(current: Order) {
-  try {
-    const updated = await approveMutation.mutateAsync({
-      id: current.id,
-      input: {
-        lines: lines.value.map((line) => ({
-          saleArticleId: line.saleArticleId,
-          confirmedQty: line.confirmedQty ?? line.requestedQty,
-        })),
-      },
-    })
-    toast.success(`Pedido ${updated.number}: ${ORDER_STATUS_LABELS[updated.status].toLowerCase()}`)
-  } catch (err) {
-    showOrderError(err)
+/** Motivo del rechazo o de los cambios del obrador, para que la tienda lo vea destacado. */
+const statusNote = computed(() => {
+  const status = order.value?.status
+  if (status !== 'rejected' && status !== 'modified') return undefined
+  const entry = order.value?.statusHistory.at(-1)
+  if (!entry?.reason) return undefined
+  return {
+    title: `${status === 'rejected' ? 'Rechazado' : 'Modificado'} por ${entry.userName}`,
+    reason: entry.reason,
+    rejected: status === 'rejected',
   }
-}
+})
 
-// Rechazar
+// Aprobar (con o sin cambios) y rechazar: siempre con diálogo de confirmación.
+const approving = ref(false)
 const rejecting = ref(false)
 
 // Cancelar (tienda)
@@ -165,18 +155,14 @@ async function cancel(current: Order) {
         </div>
 
         <div v-if="canValidate" class="flex flex-wrap gap-2">
-          <Button
-            variant="destructive"
-            :disabled="approveMutation.isPending.value"
-            @click="rejecting = true"
-          >
+          <Button variant="destructive" @click="rejecting = true">
             <XIcon />
             Rechazar
           </Button>
           <Button
-            :disabled="approveMutation.isPending.value || servesNothing"
+            :disabled="servesNothing"
             :title="servesNothing ? 'Para no servir nada, rechaza el pedido' : undefined"
-            @click="approve(order)"
+            @click="approving = true"
           >
             <CheckIcon />
             {{ hasChanges ? 'Aprobar con cambios' : 'Aprobar' }}
@@ -194,11 +180,27 @@ async function cancel(current: Order) {
       </header>
 
       <div
-        v-if="rejection"
-        class="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"
+        v-if="statusNote"
+        :class="
+          cn(
+            'rounded-xl border p-4 text-sm',
+            statusNote.rejected
+              ? 'border-destructive/30 bg-destructive/5'
+              : 'border-teal-500/30 bg-teal-50 dark:bg-teal-500/10',
+          )
+        "
       >
-        <p class="font-medium text-destructive">Rechazado por {{ rejection.userName }}</p>
-        <p>{{ rejection.reason }}</p>
+        <p
+          :class="
+            cn(
+              'font-medium',
+              statusNote.rejected ? 'text-destructive' : 'text-teal-700 dark:text-teal-300',
+            )
+          "
+        >
+          {{ statusNote.title }}
+        </p>
+        <p class="whitespace-pre-line">{{ statusNote.reason }}</p>
       </div>
 
       <dl>
@@ -244,14 +246,16 @@ async function cancel(current: Order) {
                   :model-value="line.confirmedQty ?? line.requestedQty"
                   @update:model-value="(value: number) => (confirmed[line.saleArticleId] = value)"
                   :label="`Cantidad a servir de ${line.name}`"
-                  :class="cn(line.confirmedQty !== line.requestedQty && '[&_input]:border-sky-500')"
+                  :class="
+                    cn(line.confirmedQty !== line.requestedQty && '[&_input]:border-teal-500')
+                  "
                 />
                 <span
                   v-else
                   :class="
                     cn(
                       'tabular-nums',
-                      line.confirmedQty !== line.requestedQty && 'font-semibold text-sky-700',
+                      line.confirmedQty !== line.requestedQty && 'font-semibold text-teal-700',
                     )
                   "
                 >
@@ -294,6 +298,7 @@ async function cancel(current: Order) {
         </ol>
       </div>
 
+      <ApproveOrderDialog v-model:open="approving" :order="order" :lines="lines" />
       <RejectOrderDialog v-model:open="rejecting" :order="order" />
 
       <AlertDialog v-model:open="cancelling">

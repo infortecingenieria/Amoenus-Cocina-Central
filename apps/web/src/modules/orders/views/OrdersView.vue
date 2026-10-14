@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  ORDER_STATUS_LABELS,
   type ListOrdersParams,
   type OrderSort,
   type OrderStatus,
@@ -19,7 +18,6 @@ import {
 } from '@lucide/vue'
 import { refDebounced } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
-import { toast } from 'vue-sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,10 +35,10 @@ import { getErrorMessage } from '@/lib/api-client'
 import { formatDate, formatTime } from '@/lib/format'
 import { useSessionStore } from '@/stores/session'
 
+import ApproveOrderDialog from '../components/ApproveOrderDialog.vue'
 import OrderStatusBadge from '../components/OrderStatusBadge.vue'
 import OrderStatusFilter from '../components/OrderStatusFilter.vue'
-import { useApproveOrder, useOrderList } from '../composables/useOrders'
-import { showOrderError } from '../order-errors'
+import { useOrderList } from '../composables/useOrders'
 
 const PAGE_SIZE = 20
 
@@ -88,20 +86,13 @@ const volumeLabel = (order: OrderSummary) =>
   `${order.lineCount} ${order.lineCount === 1 ? 'producto' : 'productos'} • ` +
   `${order.totalQuantity} ${order.totalQuantity === 1 ? 'ud' : 'uds'} en total`
 
-// Aprobar desde la fila: con las cantidades pedidas. Para ajustarlas, «Editar».
-const approveMutation = useApproveOrder()
-const approvingId = ref<string | null>(null)
+// Aprobar desde la fila (con confirmación): con las cantidades pedidas. Para ajustarlas, «Editar».
+const approvingOrder = ref<OrderSummary | null>(null)
+const approveOpen = ref(false)
 
-async function approve(order: OrderSummary) {
-  approvingId.value = order.id
-  try {
-    const updated = await approveMutation.mutateAsync({ id: order.id, input: {} })
-    toast.success(`Pedido ${updated.number}: ${ORDER_STATUS_LABELS[updated.status].toLowerCase()}`)
-  } catch (err) {
-    showOrderError(err)
-  } finally {
-    approvingId.value = null
-  }
+function openApprove(order: OrderSummary) {
+  approvingOrder.value = order
+  approveOpen.value = true
 }
 </script>
 
@@ -214,9 +205,8 @@ async function approve(order: OrderSummary) {
                     size="sm"
                     variant="outline"
                     class="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
-                    :disabled="approvingId !== null"
                     title="Aprobar con las cantidades pedidas"
-                    @click="approve(order)"
+                    @click="openApprove(order)"
                   >
                     <CheckIcon />
                     Aprobar
@@ -262,5 +252,7 @@ async function approve(order: OrderSummary) {
         <ChevronRightIcon />
       </Button>
     </footer>
+
+    <ApproveOrderDialog v-if="approvingOrder" v-model:open="approveOpen" :order="approvingOrder" />
   </section>
 </template>
