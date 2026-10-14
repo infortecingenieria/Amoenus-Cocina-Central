@@ -36,7 +36,6 @@ const toSaleArticle = (record: PopulatedSaleArticleRecord): SaleArticle => ({
   familyName: record.familyId?.name ?? null,
   imageUrl: record.imageUrl,
   active: record.active,
-  amoenusSaleItemId: record.amoenusSaleItemId,
   createdAt: record.createdAt.toISOString(),
   updatedAt: record.updatedAt.toISOString(),
 })

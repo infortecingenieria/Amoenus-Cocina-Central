@@ -26,7 +26,7 @@ fábrica/obrador. `ConfigFactory` asocia un cliente con sus proveedores-obrador 
 | Dato                      | Dirección                                         | Notas                                                |
 | ------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
 | Tiendas                   | Amoenus → Cocina Central                          | `stores.amoenusLocalId` ↔ `locals._id`               |
-| Artículos de venta        | Amoenus → Cocina Central (o mantenimiento propio) | `sale_articles.amoenusSaleItemId` ↔ `sale-items._id` |
+| Artículos de venta        | Amoenus → Cocina Central (o mantenimiento propio) | Sin vínculo: por definir si se decide la integración |
 | Usuarios / login          | ?                                                 | Ver opciones de autenticación                        |
 | Pedido aprobado / albarán | Cocina Central → Amoenus                          | Para que el stock de la tienda refleje la entrada    |
 

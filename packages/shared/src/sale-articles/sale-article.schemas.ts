@@ -19,8 +19,6 @@ const saleArticleFields = {
   familyId: objectIdSchema.nullable(),
   imageUrl: z.url('URL no válida').nullable(),
   active: z.boolean(),
-  /** `_id` del artículo de venta equivalente en Amoenus Central, si está vinculado. */
-  amoenusSaleItemId: z.string().trim().min(1).nullable(),
 }
 
 // Sin `.default()` en los campos base: dentro de `.partial()` Zod 4 seguiría aplicando el
@@ -30,7 +28,6 @@ export const createSaleArticleSchema = z.object({
   familyId: saleArticleFields.familyId.default(null),
   imageUrl: saleArticleFields.imageUrl.default(null),
   active: saleArticleFields.active.default(true),
-  amoenusSaleItemId: saleArticleFields.amoenusSaleItemId.default(null),
 })
 export type CreateSaleArticleInput = z.input<typeof createSaleArticleSchema>
 export type CreateSaleArticleData = z.output<typeof createSaleArticleSchema>

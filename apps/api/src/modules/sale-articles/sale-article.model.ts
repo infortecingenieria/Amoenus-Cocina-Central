@@ -11,7 +11,6 @@ export interface SaleArticleRecord {
   familyId: Types.ObjectId | null
   imageUrl: string | null
   active: boolean
-  amoenusSaleItemId: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -26,7 +25,6 @@ const saleArticleSchema = new Schema<SaleArticleRecord>(
     familyId: { type: Schema.Types.ObjectId, ref: 'Family', default: null },
     imageUrl: { type: String, default: null },
     active: { type: Boolean, default: true },
-    amoenusSaleItemId: { type: String, default: null },
   },
   { collection: 'sale_articles', timestamps: true },
 )
@@ -34,10 +32,5 @@ const saleArticleSchema = new Schema<SaleArticleRecord>(
 saleArticleSchema.index({ code: 1 }, { unique: true })
 saleArticleSchema.index({ active: 1, name: 1 })
 saleArticleSchema.index({ familyId: 1, name: 1 })
-// Un artículo de Amoenus Central solo puede estar vinculado a un artículo del obrador.
-saleArticleSchema.index(
-  { amoenusSaleItemId: 1 },
-  { unique: true, partialFilterExpression: { amoenusSaleItemId: { $type: 'string' } } },
-)
 
 export const SaleArticleModel = model<SaleArticleRecord>('SaleArticle', saleArticleSchema)

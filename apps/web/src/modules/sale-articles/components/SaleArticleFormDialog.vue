@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   NumberField,
@@ -57,7 +57,6 @@ interface FormState {
   /** Id de la familia o `NO_FAMILY`: el Select no admite `''` como valor. */
   familyId: string
   imageUrl: string
-  amoenusSaleItemId: string
   active: boolean
 }
 type FormErrors = Partial<Record<keyof FormState, string[]>>
@@ -70,7 +69,6 @@ const emptyForm = (): FormState => ({
   price: 0,
   familyId: NO_FAMILY,
   imageUrl: '',
-  amoenusSaleItemId: '',
   active: true,
 })
 
@@ -82,7 +80,6 @@ const toForm = (article: SaleArticle): FormState => ({
   price: article.price,
   familyId: article.familyId ?? NO_FAMILY,
   imageUrl: article.imageUrl ?? '',
-  amoenusSaleItemId: article.amoenusSaleItemId ?? '',
   active: article.active,
 })
 
@@ -107,7 +104,6 @@ async function submit() {
     ...form,
     familyId: form.familyId === NO_FAMILY ? null : form.familyId,
     imageUrl: form.imageUrl.trim() || null,
-    amoenusSaleItemId: form.amoenusSaleItemId.trim() || null,
   })
   if (!parsed.success) {
     errors.value = z.flattenError(parsed.error).fieldErrors
@@ -230,15 +226,6 @@ async function submit() {
             <FieldLabel for="imageUrl">URL de la imagen</FieldLabel>
             <Input id="imageUrl" v-model="form.imageUrl" type="url" placeholder="https://…" />
             <FieldError :errors="errors.imageUrl" />
-          </Field>
-
-          <Field :data-invalid="!!errors.amoenusSaleItemId">
-            <FieldLabel for="amoenusSaleItemId">Artículo de venta en Amoenus Central</FieldLabel>
-            <Input id="amoenusSaleItemId" v-model="form.amoenusSaleItemId" autocomplete="off" />
-            <FieldDescription
-              >Identificador para vincularlo con Amoenus. Opcional.</FieldDescription
-            >
-            <FieldError :errors="errors.amoenusSaleItemId" />
           </Field>
 
           <Field orientation="horizontal">

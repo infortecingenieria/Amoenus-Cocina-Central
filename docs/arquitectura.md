@@ -78,8 +78,7 @@ families (familias de artículos de venta)             ✅ implementado
 
 sale_articles (artículos de venta del obrador)        ✅ implementado
   _id, code (único, 5 dígitos: "00123"), name, familyId? (→ families), format (box|tray|bag|unit),
-  unitsPerFormat, price, imageUrl, active, amoenusSaleItemId? (único si existe),
-  createdAt, updatedAt
+  unitsPerFormat, price, imageUrl, active, createdAt, updatedAt
 
 orders (pedidos tienda → obrador)                    ✅ implementado
   _id, number ("PED-2026-0001", correlativo por año), storeName, status, notes,

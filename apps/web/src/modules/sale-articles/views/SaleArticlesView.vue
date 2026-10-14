@@ -9,7 +9,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CroissantIcon,
-  Link2Icon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
@@ -216,14 +215,7 @@ async function confirmDelete() {
             </TableCell>
             <TableCell class="font-mono text-sm">{{ article.code }}</TableCell>
             <TableCell>
-              <div class="flex items-center gap-2 font-medium">
-                {{ article.name }}
-                <Link2Icon
-                  v-if="article.amoenusSaleItemId"
-                  class="size-4 text-muted-foreground"
-                  aria-label="Vinculado con Amoenus Central"
-                />
-              </div>
+              <span class="font-medium">{{ article.name }}</span>
             </TableCell>
             <TableCell>
               <span v-if="article.familyName">{{ article.familyName }}</span>
