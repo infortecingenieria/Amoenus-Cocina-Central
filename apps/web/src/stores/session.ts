@@ -6,6 +6,8 @@ import { computed } from 'vue'
 import { queryClient } from '@/lib/query-client'
 import { authApi } from '@/modules/auth/api/auth.api'
 
+import { useOrderCartStore } from './order-cart'
+
 const TOKEN_KEY = 'cocina-central:token'
 const USER_KEY = 'cocina-central:user'
 
@@ -44,7 +46,8 @@ export const useSessionStore = defineStore('session', () => {
   function logout() {
     token.value = null
     storedUser.value = null
-    // Que el siguiente usuario no vea datos cacheados del anterior.
+    // Que el siguiente usuario no vea datos cacheados del anterior ni su pedido a medias.
+    useOrderCartStore().clear()
     queryClient.clear()
   }
 

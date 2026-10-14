@@ -34,7 +34,7 @@ export interface NavSection {
 export const NAV_SECTIONS: readonly NavSection[] = [
   {
     items: [
-      { label: 'Nuevo Pedido', route: 'new-order', icon: ShoppingCartIcon },
+      { label: 'Nuevo Pedido', route: 'new-order', icon: ShoppingCartIcon, roles: ['store'] },
       { label: 'Solicitudes', route: 'requests', icon: ClipboardListIcon },
       { label: 'Historial', route: 'history', icon: HistoryIcon },
       { label: 'Entregas', route: 'deliveries', icon: TruckIcon },

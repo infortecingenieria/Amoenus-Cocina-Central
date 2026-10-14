@@ -1,6 +1,7 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 
 import { FamilyRepository } from '../families/family.repository'
+import { OrderRepository } from '../orders/order.repository'
 import { SaleArticleController } from './sale-article.controller'
 import { SaleArticleRepository } from './sale-article.repository'
 import {
@@ -14,7 +15,11 @@ import { SaleArticleService } from './sale-article.service'
 
 export const saleArticleRoutes: FastifyPluginAsyncZod = async (app) => {
   const controller = new SaleArticleController(
-    new SaleArticleService(new SaleArticleRepository(), new FamilyRepository()),
+    new SaleArticleService(
+      new SaleArticleRepository(),
+      new FamilyRepository(),
+      new OrderRepository(),
+    ),
   )
 
   // Consultar: cualquier usuario (las tiendas ven el catálogo). Modificar: solo el obrador.

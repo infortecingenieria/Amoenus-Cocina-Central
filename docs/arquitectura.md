@@ -60,8 +60,8 @@ Transversal:
 
 ## Modelo de datos (propuesta)
 
-Implementado: `users`, `families` y `sale_articles`. El resto es la propuesta para los siguientes
-módulos.
+Implementado: `users`, `families`, `sale_articles`, `orders` y `counters`. El resto es la
+propuesta para los siguientes módulos.
 
 ```
 users (usuarios de la aplicación)                     ✅ implementado
@@ -81,19 +81,20 @@ sale_articles (artículos de venta del obrador)        ✅ implementado
   unitsPerFormat, price, imageUrl, active, amoenusSaleItemId? (único si existe),
   createdAt, updatedAt
 
-orders (pedidos tienda → obrador)
-  _id, number ("PED-2026-0001", correlativo por año), storeId, status,
-  requestedDeliveryAt, deliverySlot, notes,
+orders (pedidos tienda → obrador)                    ✅ implementado
+  _id, number ("PED-2026-0001", correlativo por año), storeName, status, notes,
   lines: [{ saleArticleId, code, name, format, unitsPerFormat,   ← copia del artículo al pedir
-            unitPrice, requestedQty, confirmedQty? }],
-  statusHistory: [{ status, at, userId, reason? }],               ← motivo de rechazo, auditoría
-  createdBy, createdAt, updatedAt
+            unitPrice, requestedQty, confirmedQty }],            ← confirmedQty: null hasta aprobar
+  statusHistory: [{ status, at, userId, userName, reason }],     ← motivo de rechazo, auditoría
+  createdBy: { id, displayName }, createdAt, updatedAt
+  ← cuando exista `stores`, storeName pasará a ser storeId
+  Sin fecha de entrega: el listado muestra y ordena por `createdAt`.
 
 delivery_notes (albaranes)
   _id, number, orderId, storeId, issuedAt, lines (cantidades confirmadas), totals
 
-counters (numeración correlativa atómica: pedidos y albaranes)
-  _id ("order-2026"), seq
+counters (numeración correlativa atómica: pedidos y albaranes)   ✅ implementado
+  _id ("order-2026"), seq          ← `nextSequence(key)` en `apps/api/src/database/counter.ts`
 ```
 
 Las líneas del pedido guardan una copia del artículo (nombre, formato, precio) para que el
@@ -110,9 +111,15 @@ pending ──► approved ──► in_preparation ──► delivered
    └─► cancelled  (tienda)
 ```
 
-- La tienda solo puede editar o cancelar mientras el pedido está `pending`.
+- Solo la tienda (`store`) crea pedidos y solo ve los de su tienda; puede cancelarlos mientras están
+  `pending`. El obrador (`kitchen_admin`) ve todos y los aprueba o rechaza (motivo obligatorio).
 - `modified` = aprobado con cantidades distintas a las pedidas (rotura de stock, mermas, capacidad
-  de horneada).
+  de horneada). Al aprobar, las líneas que no se indican se sirven tal cual se pidieron.
+- Los cambios de estado se hacen con `findOneAndUpdate` filtrando por el estado de origen: si dos
+  personas validan a la vez, la segunda recibe 409 `INVALID_STATE` en lugar de pisar el cambio.
+- Un artículo que ya aparece en algún pedido no se puede borrar (solo desactivar).
+- En la web, el pedido en curso (carrito) es el store Pinia `order-cart`, guardado en localStorage
+  y vaciado al enviar o al cerrar sesión.
 
 ## Decisiones técnicas
 

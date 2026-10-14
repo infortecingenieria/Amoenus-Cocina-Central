@@ -37,30 +37,20 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'pedidos/nuevo',
         name: 'new-order',
-        component: ComingSoonView,
-        meta: {
-          title: 'Nuevo pedido',
-          description:
-            'Catálogo de artículos con selector de unidades y resumen del pedido con franja de entrega y notas para el obrador.',
-        },
+        component: () => import('@/modules/orders/views/NewOrderView.vue'),
+        meta: { title: 'Nuevo pedido', roles: ['store'] },
       },
       {
         path: 'solicitudes',
         name: 'requests',
-        component: ComingSoonView,
-        meta: {
-          title: 'Solicitudes',
-          description: 'Histórico y estado de los pedidos enviados al obrador central.',
-        },
+        component: () => import('@/modules/orders/views/OrdersView.vue'),
+        meta: { title: 'Solicitudes' },
       },
       {
         path: 'solicitudes/:id',
         name: 'request-detail',
-        component: ComingSoonView,
-        meta: {
-          title: 'Detalle de pedido',
-          description: 'Validación del pedido por el obrador, ajuste de cantidades y albarán.',
-        },
+        component: () => import('@/modules/orders/views/OrderDetailView.vue'),
+        meta: { title: 'Detalle de pedido' },
       },
       {
         path: 'historial',

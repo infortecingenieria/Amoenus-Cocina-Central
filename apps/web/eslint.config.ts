@@ -22,6 +22,13 @@ export default defineConfigWithVueTs(
   ...pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
 
+  // Fija la raíz de tsconfig a este paquete: el editor lanza ESLint desde la raíz del monorepo y
+  // typescript-eslint no sabría elegir entre `apps/api` y `apps/web`.
+  {
+    name: 'app/tsconfig-root',
+    languageOptions: { parserOptions: { tsconfigRootDir: import.meta.dirname } },
+  },
+
   {
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],

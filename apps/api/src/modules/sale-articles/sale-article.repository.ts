@@ -76,6 +76,16 @@ export class SaleArticleRepository {
     return record ? toSaleArticle(record) : null
   }
 
+  /** Los ids no válidos o inexistentes simplemente no aparecen en el resultado. */
+  async findByIds(ids: string[]): Promise<SaleArticle[]> {
+    const validIds = ids.filter((id) => isValidObjectId(id))
+    if (validIds.length === 0) return []
+    const records = await SaleArticleModel.find({ _id: { $in: validIds } })
+      .populate(POPULATE_FAMILY)
+      .lean<PopulatedSaleArticleRecord[]>()
+    return records.map(toSaleArticle)
+  }
+
   async findByCode(code: string): Promise<SaleArticle | null> {
     const record = await SaleArticleModel.findOne({ code })
       .populate(POPULATE_FAMILY)

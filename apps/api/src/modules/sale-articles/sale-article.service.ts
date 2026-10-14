@@ -9,16 +9,23 @@ import type {
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors'
 import { roundCurrency } from '../../shared/http'
 import type { FamilyRepository } from '../families/family.repository'
+import type { OrderRepository } from '../orders/order.repository'
 import type { SaleArticleRepository } from './sale-article.repository'
 
 /** Reglas de negocio del mantenimiento de artículos de venta. */
 export class SaleArticleService {
   private readonly repository: SaleArticleRepository
   private readonly families: FamilyRepository
+  private readonly orders: OrderRepository
 
-  constructor(repository: SaleArticleRepository, families: FamilyRepository) {
+  constructor(
+    repository: SaleArticleRepository,
+    families: FamilyRepository,
+    orders: OrderRepository,
+  ) {
     this.repository = repository
     this.families = families
+    this.orders = orders
   }
 
   async list({
@@ -57,9 +64,13 @@ export class SaleArticleService {
     return article
   }
 
-  // TODO: cuando exista el módulo de pedidos, impedir el borrado de artículos ya pedidos
-  // (en ese caso solo se podrán desactivar).
+  /** Un artículo que ya se ha pedido no se borra (solo se puede desactivar). */
   async delete(id: string): Promise<void> {
+    if (await this.orders.existsWithArticle(id)) {
+      throw new ConflictError(
+        'El artículo ya se ha pedido y no se puede eliminar. Desactívalo para que no aparezca en los pedidos',
+      )
+    }
     const deleted = await this.repository.delete(id)
     if (!deleted) throw new NotFoundError('Artículo de venta no encontrado')
   }

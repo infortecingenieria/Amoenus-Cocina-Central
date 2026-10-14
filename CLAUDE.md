@@ -22,7 +22,11 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   `pnpm db:seed` crea los usuarios `admin` y `tienda` (contraseñas de desarrollo en `seed.ts`).
 - Pendiente de decidir: integración con Amoenus Central y si el login pasa a ser contra Amoenus (ver
   preguntas abiertas en `docs/integracion-amoenus-central.md`). Logo de ¡La Empanadera! provisional.
-- Siguiente: módulos `stores` y `orders` (pantalla Nuevo Pedido), después Solicitudes, validación y albarán PDF.
+- Pedidos (`orders`): pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (filtro
+  multiestado, orden por fecha de creación, Aprobar/Editar por fila) y ficha con aprobación (ajustando
+  cantidades → `modified`), rechazo con motivo y cancelación por la tienda. Sin módulo `stores` aún:
+  el pedido guarda el `storeName` del usuario.
+- Siguiente: módulo `stores`, preparación/entrega y albarán PDF.
 
 ## Reglas de código
 

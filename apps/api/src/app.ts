@@ -12,6 +12,7 @@ import type { AppConfig } from './config/env'
 import { authRoutes } from './modules/auth/auth.routes'
 import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
+import { orderRoutes } from './modules/orders/order.routes'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
 import { authPlugin } from './plugins/auth'
 import { registerErrorHandler } from './plugins/error-handler'
@@ -49,6 +50,7 @@ const apiV1Routes: FastifyPluginAsyncZod = async (app) => {
 
     await protectedApp.register(saleArticleRoutes, { prefix: '/sale-articles' })
     await protectedApp.register(familyRoutes, { prefix: '/families' })
+    await protectedApp.register(orderRoutes, { prefix: '/orders' })
   })
 }
 

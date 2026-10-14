@@ -1,0 +1,221 @@
+import {
+  canTransition,
+  ORDER_STATUS_LABELS,
+  type ApproveOrderInput,
+  type AuthUser,
+  type CreateOrderData,
+  type ListOrdersQuery,
+  type Order,
+  type OrderLine,
+  type OrderStatus,
+  type OrderSummary,
+  type Paginated,
+  type RejectOrderInput,
+} from '@cocina-central/shared'
+
+import { nextSequence } from '../../database/counter'
+import {
+  ForbiddenError,
+  InvalidStateError,
+  NotFoundError,
+  ValidationError,
+  type ValidationIssue,
+} from '../../shared/errors'
+import type { SaleArticleRepository } from '../sale-articles/sale-article.repository'
+import type { OrderRepository } from './order.repository'
+
+/** Zona horaria del negocio: decide en qué año se numera un pedido hecho en Nochevieja. */
+const BUSINESS_TIME_ZONE = 'Europe/Madrid'
+
+/** Año actual como «2026». */
+const currentYear = (): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TIME_ZONE, year: 'numeric' }).format(
+    new Date(),
+  )
+
+/** «PED-2026-0001» */
+const formatOrderNumber = (year: string, sequence: number): string =>
+  `PED-${year}-${String(sequence).padStart(4, '0')}`
+
+/** Verbo de cada acción para los mensajes de error. */
+const ACTION_VERBS: Partial<Record<OrderStatus, string>> = {
+  approved: 'aprobar',
+  modified: 'aprobar',
+  rejected: 'rechazar',
+  cancelled: 'cancelar',
+}
+
+/** Reglas de negocio de los pedidos de tienda al obrador. */
+export class OrderService {
+  private readonly repository: OrderRepository
+  private readonly saleArticles: SaleArticleRepository
+
+  constructor(repository: OrderRepository, saleArticles: SaleArticleRepository) {
+    this.repository = repository
+    this.saleArticles = saleArticles
+  }
+
+  /** La tienda solo ve sus pedidos; el obrador, todos. */
+  async list(
+    { page, pageSize, status, search, sort }: ListOrdersQuery,
+    user: AuthUser,
+  ): Promise<Paginated<OrderSummary>> {
+    const { items, total } = await this.repository.findMany(
+      { status, search, storeName: this.storeScope(user) },
+      { page, pageSize },
+      sort,
+    )
+    return { items, total, page, pageSize }
+  }
+
+  /** Un pedido de otra tienda responde igual que uno inexistente. */
+  async getById(id: string, user: AuthUser): Promise<Order> {
+    const order = await this.repository.findById(id)
+    const storeName = this.storeScope(user)
+    if (!order || (storeName !== undefined && order.storeName !== storeName)) {
+      throw new NotFoundError('Pedido no encontrado')
+    }
+    return order
+  }
+
+  async create(data: CreateOrderData, user: AuthUser): Promise<Order> {
+    if (!user.storeName) throw new ForbiddenError('Tu usuario no tiene ninguna tienda asignada')
+
+    const lines = await this.buildLines(data.lines)
+    const year = currentYear()
+    const number = formatOrderNumber(year, await nextSequence(`order-${year}`))
+
+    return this.repository.create({
+      number,
+      storeName: user.storeName,
+      notes: data.notes || null,
+      lines,
+      createdBy: { id: user.id, displayName: user.displayName },
+      firstEntry: this.historyEntry('pending', user),
+    })
+  }
+
+  /**
+   * Aprueba el pedido con las cantidades confirmadas. Las líneas que no se indican se sirven
+   * tal cual se pidieron; si alguna cambia, el pedido queda «modificado por obrador».
+   */
+  async approve(id: string, data: ApproveOrderInput, user: AuthUser): Promise<Order> {
+    const order = await this.getById(id, user)
+    this.ensureCanTransition(order, 'approved')
+
+    const confirmed = new Map(
+      (data.lines ?? []).map((line) => [line.saleArticleId, line.confirmedQty]),
+    )
+    const issues: ValidationIssue[] = []
+    data.lines?.forEach((line, index) => {
+      if (!order.lines.some((orderLine) => orderLine.saleArticleId === line.saleArticleId)) {
+        issues.push({
+          path: `/lines/${index}/saleArticleId`,
+          message: 'El artículo no está en el pedido',
+        })
+      }
+    })
+    if (issues.length > 0) throw new ValidationError('Hay líneas que no son del pedido', issues)
+
+    const lines: OrderLine[] = order.lines.map((line) => ({
+      ...line,
+      confirmedQty: confirmed.get(line.saleArticleId) ?? line.requestedQty,
+    }))
+    if (lines.every((line) => line.confirmedQty === 0)) {
+      throw new ValidationError('Para no servir ningún artículo, rechaza el pedido')
+    }
+
+    const status = lines.some((line) => line.confirmedQty !== line.requestedQty)
+      ? 'modified'
+      : 'approved'
+    return this.applyTransition(order, status, user, { lines })
+  }
+
+  async reject(id: string, { reason }: RejectOrderInput, user: AuthUser): Promise<Order> {
+    const order = await this.getById(id, user)
+    return this.applyTransition(order, 'rejected', user, { reason })
+  }
+
+  /** Solo la tienda que lo hizo y solo mientras el obrador no lo ha tramitado. */
+  async cancel(id: string, user: AuthUser): Promise<Order> {
+    const order = await this.getById(id, user)
+    return this.applyTransition(order, 'cancelled', user)
+  }
+
+  /** `undefined` = sin restricción (obrador). */
+  private storeScope(user: AuthUser): string | undefined {
+    // Un usuario de tienda sin tienda asignada no ve nada (cadena que no coincide con ninguna).
+    return user.role === 'store' ? (user.storeName ?? '') : undefined
+  }
+
+  /** Comprueba que todos los artículos existen y están activos, y copia sus datos en la línea. */
+  private async buildLines(requested: CreateOrderData['lines']): Promise<OrderLine[]> {
+    const articles = await this.saleArticles.findByIds(requested.map((line) => line.saleArticleId))
+    const byId = new Map(articles.map((article) => [article.id, article]))
+
+    const issues: ValidationIssue[] = []
+    const lines: OrderLine[] = []
+    requested.forEach((line, index) => {
+      const article = byId.get(line.saleArticleId)
+      const path = `/lines/${index}/saleArticleId`
+      if (!article) {
+        issues.push({ path, message: 'El artículo no existe' })
+      } else if (!article.active) {
+        issues.push({ path, message: `«${article.name}» ya no está disponible` })
+      } else {
+        lines.push({
+          saleArticleId: article.id,
+          code: article.code,
+          name: article.name,
+          format: article.format,
+          unitsPerFormat: article.unitsPerFormat,
+          unitPrice: article.price,
+          requestedQty: line.quantity,
+          confirmedQty: null,
+        })
+      }
+    })
+    if (issues.length > 0) {
+      throw new ValidationError('Hay artículos del pedido que no se pueden pedir', issues)
+    }
+    return lines
+  }
+
+  private ensureCanTransition(order: Order, to: OrderStatus): void {
+    if (!canTransition(order.status, to)) {
+      throw new InvalidStateError(
+        `El pedido ${order.number} está «${ORDER_STATUS_LABELS[order.status]}» y no se puede ${ACTION_VERBS[to] ?? 'modificar'}`,
+      )
+    }
+  }
+
+  private async applyTransition(
+    order: Order,
+    to: OrderStatus,
+    user: AuthUser,
+    { lines, reason }: { lines?: OrderLine[]; reason?: string } = {},
+  ): Promise<Order> {
+    this.ensureCanTransition(order, to)
+    const updated = await this.repository.transition(order.id, order.status, {
+      status: to,
+      lines,
+      entry: this.historyEntry(to, user, reason),
+    })
+    if (!updated) {
+      throw new InvalidStateError(
+        `El pedido ${order.number} ha cambiado mientras tanto. Recarga para ver su estado actual`,
+      )
+    }
+    return updated
+  }
+
+  private historyEntry(status: OrderStatus, user: AuthUser, reason?: string) {
+    return {
+      status,
+      at: new Date().toISOString(),
+      userId: user.id,
+      userName: user.displayName,
+      reason: reason ?? null,
+    }
+  }
+}
