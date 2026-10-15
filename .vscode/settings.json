@@ -7,7 +7,7 @@
   },
   "eslint.workingDirectories": [{ "mode": "auto" }],
   "npm.enableScriptExplorer": true,
-  "npm.exclude": ["**/node_modules/**", "**/dist/**"],
+  "npm.exclude": ["**/node_modules/**", "**/dist/**", "**/apps/**", "**/packages/**"],
   "npm.packageManager": "pnpm",
   "editor.codeActionsOnSave": {
     "source.fixAll": "explicit"

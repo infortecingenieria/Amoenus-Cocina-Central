@@ -41,7 +41,8 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   Estado de servidor → TanStack Query; estado de cliente → Pinia.
 - `apps/web/src/components/ui/` lo genera shadcn-vue (`pnpm dlx shadcn-vue@latest add <x>` desde `apps/web`): no editar a mano.
 - TypeScript 6 (no 7: vue-tsc/typescript-eslint no lo soportan aún).
-- Antes de dar algo por terminado: `pnpm type-check && pnpm lint && pnpm test && pnpm build`.
+- Antes de dar algo por terminado: `pnpm all:type-check && pnpm all:lint && pnpm all:test && pnpm all:build`.
+  Los scripts raíz llevan prefijo por sección (`all:`, `api:`, `web:`, `db:`) para verse agrupados en el panel "Scripts Npm".
 
 ## Convenciones de git
 
