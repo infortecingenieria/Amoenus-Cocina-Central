@@ -1,6 +1,8 @@
 import {
+  ORDER_SOURCE_SYSTEMS,
   ORDER_STATUSES,
   PACKAGE_FORMATS,
+  type OrderSource,
   type OrderStatus,
   type PackageFormat,
 } from '@cocina-central/shared'
@@ -31,6 +33,8 @@ export interface OrderRecord {
   storeName: string
   status: OrderStatus
   notes: string | null
+  /** Ausente o null en los pedidos hechos desde esta aplicación. */
+  source?: OrderSource | null
   lines: OrderLineRecord[]
   statusHistory: OrderStatusEntryRecord[]
   createdBy: { id: Types.ObjectId; displayName: string }
@@ -63,12 +67,23 @@ const orderStatusEntrySchema = new Schema<OrderStatusEntryRecord>(
   { _id: false },
 )
 
+const orderSourceSchema = new Schema<OrderSource>(
+  {
+    system: { type: String, enum: ORDER_SOURCE_SYSTEMS, required: true },
+    externalOrderId: { type: String, required: true },
+    clientId: { type: String, required: true },
+    localId: { type: String, required: true },
+  },
+  { _id: false },
+)
+
 const orderSchema = new Schema<OrderRecord>(
   {
     number: { type: String, required: true },
     storeName: { type: String, required: true },
     status: { type: String, enum: ORDER_STATUSES, required: true, default: 'pending' },
     notes: { type: String, default: null },
+    source: { type: orderSourceSchema, default: null },
     lines: { type: [orderLineSchema], required: true },
     statusHistory: { type: [orderStatusEntrySchema], default: [] },
     createdBy: {
@@ -82,6 +97,11 @@ const orderSchema = new Schema<OrderRecord>(
 orderSchema.index({ number: 1 }, { unique: true })
 orderSchema.index({ storeName: 1, createdAt: -1 })
 orderSchema.index({ status: 1, createdAt: -1 })
+// Un pedido de otro sistema entra una sola vez aunque se reenvíe.
+orderSchema.index(
+  { 'source.system': 1, 'source.externalOrderId': 1 },
+  { unique: true, partialFilterExpression: { 'source.externalOrderId': { $exists: true } } },
+)
 // Para saber si un artículo ya se ha pedido (no se puede borrar).
 orderSchema.index({ 'lines.saleArticleId': 1 })
 

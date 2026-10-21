@@ -12,6 +12,7 @@ import type { AppConfig } from './config/env'
 import { authRoutes } from './modules/auth/auth.routes'
 import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
+import { amoenusIntegrationRoutes } from './modules/integrations/amoenus/amoenus.routes'
 import { orderRoutes } from './modules/orders/order.routes'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
 import { authPlugin } from './plugins/auth'
@@ -20,7 +21,13 @@ import { registerSwagger } from './plugins/swagger'
 
 export type AppOptions = Pick<
   AppConfig,
-  'nodeEnv' | 'logLevel' | 'corsOrigins' | 'docsEnabled' | 'jwtSecret' | 'jwtExpiresIn'
+  | 'nodeEnv'
+  | 'logLevel'
+  | 'corsOrigins'
+  | 'docsEnabled'
+  | 'jwtSecret'
+  | 'jwtExpiresIn'
+  | 'amoenusApiKey'
 >
 
 const buildLogger = ({ nodeEnv, logLevel }: AppOptions): FastifyServerOptions['logger'] => {
@@ -41,8 +48,17 @@ const buildLogger = ({ nodeEnv, logLevel }: AppOptions): FastifyServerOptions['l
  * Rutas de negocio versionadas. Cada módulo nuevo se registra aquí con su prefijo, dentro del
  * bloque protegido salvo que deba ser público (como el login).
  */
-const apiV1Routes: FastifyPluginAsyncZod = async (app) => {
+const apiV1Routes: FastifyPluginAsyncZod<Pick<AppOptions, 'amoenusApiKey'>> = async (
+  app,
+  { amoenusApiKey },
+) => {
   await app.register(authRoutes, { prefix: '/auth' })
+
+  // Integraciones de máquina a máquina: se autentican con clave de API, no con sesión.
+  await app.register(amoenusIntegrationRoutes, {
+    prefix: '/integrations/amoenus',
+    apiKey: amoenusApiKey,
+  })
 
   // Todo lo registrado aquí exige sesión iniciada.
   await app.register(async (protectedApp) => {
@@ -74,7 +90,7 @@ export async function buildApp(options: AppOptions) {
   if (options.docsEnabled) await registerSwagger(app)
 
   await app.register(healthRoutes)
-  await app.register(apiV1Routes, { prefix: '/api/v1' })
+  await app.register(apiV1Routes, { prefix: '/api/v1', amoenusApiKey: options.amoenusApiKey })
 
   return app
 }

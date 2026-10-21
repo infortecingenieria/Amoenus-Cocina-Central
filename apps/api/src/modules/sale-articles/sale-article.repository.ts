@@ -91,6 +91,15 @@ export class SaleArticleRepository {
     return record ? toSaleArticle(record) : null
   }
 
+  /** Los códigos inexistentes simplemente no aparecen en el resultado. */
+  async findByCodes(codes: string[]): Promise<SaleArticle[]> {
+    if (codes.length === 0) return []
+    const records = await SaleArticleModel.find({ code: { $in: codes } })
+      .populate(POPULATE_FAMILY)
+      .lean<PopulatedSaleArticleRecord[]>()
+    return records.map(toSaleArticle)
+  }
+
   async countByFamily(familyId: string): Promise<number> {
     if (!isValidObjectId(familyId)) return 0
     return SaleArticleModel.countDocuments({ familyId })

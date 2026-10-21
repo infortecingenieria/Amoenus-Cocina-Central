@@ -4,6 +4,7 @@ import {
   type Order,
   type OrderLine,
   type OrderSort,
+  type OrderSource,
   type OrderStatus,
   type OrderStatusEntry,
   type OrderSummary,
@@ -31,6 +32,7 @@ export interface NewOrderData {
   number: string
   storeName: string
   notes: string | null
+  source: OrderSource | null
   lines: OrderLine[]
   createdBy: { id: string; displayName: string }
   firstEntry: OrderStatusEntry
@@ -81,6 +83,14 @@ const toSummaryBase = (record: OrderSummaryRecord) => ({
   storeName: record.storeName,
   status: record.status,
   notes: record.notes,
+  source: record.source
+    ? {
+        system: record.source.system,
+        externalOrderId: record.source.externalOrderId,
+        clientId: record.source.clientId,
+        localId: record.source.localId,
+      }
+    : null,
   total: calculateOrderTotal(record.lines),
   createdBy: { id: record.createdBy.id.toString(), displayName: record.createdBy.displayName },
   createdAt: record.createdAt.toISOString(),
@@ -134,6 +144,17 @@ export class OrderRepository {
     return record ? toOrder(record) : null
   }
 
+  async findBySource(
+    system: OrderSource['system'],
+    externalOrderId: string,
+  ): Promise<Order | null> {
+    const record = await OrderModel.findOne({
+      'source.system': system,
+      'source.externalOrderId': externalOrderId,
+    }).lean<OrderRecord>()
+    return record ? toOrder(record) : null
+  }
+
   async existsWithArticle(saleArticleId: string): Promise<boolean> {
     if (!isValidObjectId(saleArticleId)) return false
     return (await OrderModel.exists({ 'lines.saleArticleId': saleArticleId })) !== null
@@ -145,6 +166,7 @@ export class OrderRepository {
       storeName: data.storeName,
       status: data.firstEntry.status,
       notes: data.notes,
+      source: data.source,
       lines: data.lines.map(toLineRecord),
       statusHistory: [toEntryRecord(data.firstEntry)],
       createdBy: {

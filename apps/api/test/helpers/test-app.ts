@@ -17,6 +17,9 @@ const TEST_USER_IDS: Record<UserRole, string> = {
   store: '64b7f0c2a1b2c3d4e5f60002',
 }
 
+/** Clave de API de Amoenus con la que arranca la app de pruebas. */
+export const TEST_AMOENUS_API_KEY = 'clave-de-amoenus-de-pruebas-de-al-menos-32-caracteres'
+
 /** Levanta la app contra un MongoDB en memoria, aislado por fichero de test. */
 export async function createTestApp(): Promise<TestContext> {
   const mongo = await MongoMemoryServer.create()
@@ -30,6 +33,7 @@ export async function createTestApp(): Promise<TestContext> {
     docsEnabled: true,
     jwtSecret: 'clave-de-pruebas-de-al-menos-32-caracteres',
     jwtExpiresIn: '1h',
+    amoenusApiKey: TEST_AMOENUS_API_KEY,
   })
   await app.ready()
 

@@ -1,7 +1,39 @@
 # Integración con Amoenus Central
 
-> Estado: **pendiente de decidir**. Este documento recoge lo que ya ofrece Amoenus Central
-> (Portal Corporativo) y las opciones para conectar Cocina Central.
+> Estado: **pedidos Amoenus → Cocina Central implementados** (opción A, AM-903). El resto (albarán
+> de vuelta, tiendas, login) sigue pendiente. Más abajo, lo que ya ofrece Amoenus Central (Portal
+> Corporativo) y las opciones que se valoraron.
+
+## Pedidos de Amoenus → solicitudes en Cocina Central
+
+Cuando un local de Amoenus hace un pedido al proveedor que es este obrador (Gestión de pedidos), Amoenus
+lo envía a Cocina Central y aparece como solicitud `pending`, igual que si lo hubiera hecho la tienda.
+
+```
+Amoenus (warehouses, OrderSupplier.createOrder)
+  └─ POST /api/v1/integrations/amoenus/orders      cabecera X-Api-Key: <AMOENUS_API_KEY>
+       { externalOrderId, clientId, localId, localName, createdByName, notes,
+         lines: [{ code: "10001", quantity: 3 }] }
+  ◄─ 201 Order (nuevo) · 200 Order (ya recibido) · 400 artículos que no existen · 401 clave no válida
+```
+
+- **Autenticación**: clave de API compartida (`AMOENUS_API_KEY` en el `.env` de la API, mínimo 32
+  caracteres), no sesión JWT. Sin la variable, la ruta responde siempre 401.
+- **Artículos**: se casan por código. En Amoenus, el artículo de stock lleva como código del proveedor
+  (`suppliers[].code`) el código de 5 dígitos de Cocina Central; `quantity` son formatos (bandejas,
+  cajas…), su unidad de servicio. El precio y el formato salen del catálogo de Cocina Central.
+- **Tienda**: de momento `storeName` = nombre del local en Amoenus. El pedido guarda además
+  `source: { system: 'amoenus', externalOrderId, clientId, localId }`, que el módulo `stores` podrá usar.
+- **Idempotencia**: índice único por `source.externalOrderId`; reenviar el mismo pedido devuelve el existente.
+- **Autor**: usuario técnico `amoenus` (desactivado, no puede iniciar sesión); en el pedido figura
+  `"<usuario de Amoenus> (Amoenus)"`. La ficha muestra la etiqueta «Desde Amoenus».
+- **En Amoenus**: la colección `cocinacentralconfigs` (`clientId`, `supplierId`, `baseUrl`, `apiKey`)
+  activa el envío para un cliente y proveedor. El pedido se envía antes de guardarlo: si Cocina Central no
+  responde o lo rechaza, no se guarda en Amoenus y el usuario ve el motivo. El número `PED-…` queda en
+  `orderCode` del pedido de Amoenus.
+- **Pendiente**: modificar o cancelar el pedido desde Amoenus, el albarán de vuelta y la entrada en
+  Amoenus. Si la respuesta se pierde por un timeout y el usuario reintenta, el pedido se duplica (Amoenus
+  genera un id nuevo en cada intento): el obrador rechazaría el sobrante.
 
 ## Qué existe hoy en Amoenus Central
 

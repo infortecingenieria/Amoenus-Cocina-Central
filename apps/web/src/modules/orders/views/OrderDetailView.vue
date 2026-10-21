@@ -147,6 +147,7 @@ async function cancel(current: Order) {
           <div class="flex flex-wrap items-center gap-3">
             <h1 class="font-mono text-2xl font-bold">{{ order.number }}</h1>
             <OrderStatusBadge :status="order.status" />
+            <Badge v-if="order.source?.system === 'amoenus'" variant="outline">Desde Amoenus</Badge>
           </div>
           <p class="text-muted-foreground">
             {{ order.storeName }} · enviado por {{ order.createdBy.displayName }} el

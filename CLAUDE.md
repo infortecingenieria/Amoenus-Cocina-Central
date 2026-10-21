@@ -20,8 +20,10 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 - Login propio con usuario y contraseña (colección `users`, JWT en `Authorization: Bearer`). Toda la
   API salvo `/auth/login` y `/health` exige sesión; las escrituras usan `app.requireRole(...)`.
   `pnpm db:seed` crea los usuarios `admin` y `tienda` (contraseñas de desarrollo en `seed.ts`).
-- Pendiente de decidir: integración con Amoenus Central y si el login pasa a ser contra Amoenus (ver
-  preguntas abiertas en `docs/integracion-amoenus-central.md`).
+- Integración con Amoenus Central (`modules/integrations/amoenus`): los pedidos a proveedor que hace un
+  local en Amoenus llegan como solicitudes `pending` por `POST /api/v1/integrations/amoenus/orders`, con
+  clave de API (`AMOENUS_API_KEY`), artículos por código y `source` en el pedido. Pendiente: albarán de
+  vuelta, y si el login pasa a ser contra Amoenus (ver `docs/integracion-amoenus-central.md`).
 - Pedidos (`orders`): pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (filtro
   multiestado, orden por fecha de creación, Aprobar/Editar por fila) y ficha con aprobación (ajustando
   cantidades → `modified`), rechazo con motivo y cancelación por la tienda. Sin módulo `stores` aún:

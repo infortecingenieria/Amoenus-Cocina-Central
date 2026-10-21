@@ -101,6 +101,20 @@ export const orderStatusEntrySchema = z.object({
 })
 export type OrderStatusEntry = z.infer<typeof orderStatusEntrySchema>
 
+/** Sistemas externos que pueden enviar pedidos al obrador. */
+export const ORDER_SOURCE_SYSTEMS = ['amoenus'] as const
+
+/** Origen de un pedido que no ha hecho la tienda desde esta aplicación, sino otro sistema. */
+export const orderSourceSchema = z.object({
+  system: z.enum(ORDER_SOURCE_SYSTEMS),
+  /** Identificador del pedido en el sistema de origen (en Amoenus, el `_id` del pedido a proveedor). */
+  externalOrderId: z.string(),
+  clientId: z.string(),
+  /** Local del sistema de origen que hace el pedido. */
+  localId: z.string(),
+})
+export type OrderSource = z.infer<typeof orderSourceSchema>
+
 const orderBaseSchema = z.object({
   id: objectIdSchema,
   /** Número correlativo por año: «PED-2026-0001». */
@@ -109,6 +123,8 @@ const orderBaseSchema = z.object({
   storeName: z.string(),
   status: orderStatusSchema,
   notes: z.string().nullable(),
+  /** null = lo ha hecho la tienda desde esta aplicación. */
+  source: orderSourceSchema.nullable(),
   /** Importe con las cantidades confirmadas o, si aún no las hay, las pedidas. */
   total: z.number(),
   createdBy: z.object({ id: objectIdSchema, displayName: z.string() }),

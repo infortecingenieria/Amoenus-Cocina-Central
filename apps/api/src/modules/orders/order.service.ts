@@ -7,6 +7,7 @@ import {
   type ListOrdersQuery,
   type Order,
   type OrderLine,
+  type OrderSource,
   type OrderStatus,
   type OrderSummary,
   type Paginated,
@@ -36,6 +37,17 @@ const currentYear = (): string =>
 /** «PED-2026-0001» */
 const formatOrderNumber = (year: string, sequence: number): string =>
   `PED-${year}-${String(sequence).padStart(4, '0')}`
+
+/** Quién hace el pedido: el usuario de la tienda o, en las integraciones, un usuario técnico. */
+export type OrderAuthor = Pick<AuthUser, 'id' | 'displayName'>
+
+export interface NewOrderRequest {
+  storeName: string
+  notes: string | null
+  lines: CreateOrderData['lines']
+  author: OrderAuthor
+  source: OrderSource | null
+}
 
 /** Verbo de cada acción para los mensajes de error. */
 const ACTION_VERBS: Partial<Record<OrderStatus, string>> = {
@@ -80,18 +92,26 @@ export class OrderService {
 
   async create(data: CreateOrderData, user: AuthUser): Promise<Order> {
     if (!user.storeName) throw new ForbiddenError('Tu usuario no tiene ninguna tienda asignada')
+    return this.createFor({ ...data, storeName: user.storeName, author: user, source: null })
+  }
 
-    const lines = await this.buildLines(data.lines)
+  /**
+   * Alta de un pedido pendiente para una tienda. La usan la propia tienda y las integraciones
+   * (Amoenus), para que todos los pedidos compartan validación de artículos y numeración.
+   */
+  async createFor({ storeName, notes, lines, author, source }: NewOrderRequest): Promise<Order> {
+    const orderLines = await this.buildLines(lines)
     const year = currentYear()
     const number = formatOrderNumber(year, await nextSequence(`order-${year}`))
 
     return this.repository.create({
       number,
-      storeName: user.storeName,
-      notes: data.notes || null,
-      lines,
-      createdBy: { id: user.id, displayName: user.displayName },
-      firstEntry: this.historyEntry('pending', user),
+      storeName,
+      notes: notes || null,
+      source,
+      lines: orderLines,
+      createdBy: { id: author.id, displayName: author.displayName },
+      firstEntry: this.historyEntry('pending', author),
     })
   }
 
@@ -214,7 +234,7 @@ export class OrderService {
     return updated
   }
 
-  private historyEntry(status: OrderStatus, user: AuthUser, reason?: string) {
+  private historyEntry(status: OrderStatus, user: OrderAuthor, reason?: string) {
     return {
       status,
       at: new Date().toISOString(),

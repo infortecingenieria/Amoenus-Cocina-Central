@@ -24,6 +24,11 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
   /** Duración del token de sesión, en formato de `@fastify/jwt` («12h», «7d»…). */
   JWT_EXPIRES_IN: z.string().default('12h'),
+  /** Clave que envía Amoenus Central en `X-Api-Key`. Sin ella, la integración queda desactivada. */
+  AMOENUS_API_KEY: z
+    .string()
+    .min(32, 'AMOENUS_API_KEY debe tener al menos 32 caracteres')
+    .optional(),
 })
 
 export interface AppConfig {
@@ -36,6 +41,8 @@ export interface AppConfig {
   docsEnabled: boolean
   jwtSecret: string
   jwtExpiresIn: string
+  /** null = integración con Amoenus desactivada. */
+  amoenusApiKey: string | null
 }
 
 /** Lee y valida las variables de entorno. Si hay un `.env` en el directorio actual, se carga antes. */
@@ -62,5 +69,6 @@ export function loadConfig(): AppConfig {
     docsEnabled: env.API_DOCS_ENABLED,
     jwtSecret: env.JWT_SECRET,
     jwtExpiresIn: env.JWT_EXPIRES_IN,
+    amoenusApiKey: env.AMOENUS_API_KEY ?? null,
   }
 }

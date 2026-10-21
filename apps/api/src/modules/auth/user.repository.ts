@@ -52,4 +52,20 @@ export class UserRepository {
     ).lean<UserRecord>()
     return toAuthUser(record)
   }
+
+  /**
+   * Usuario técnico de una integración (p. ej. Amoenus): queda como autor de los pedidos que
+   * llegan de fuera. Se crea desactivado, así que nunca puede iniciar sesión, y si ya existe
+   * no se modifica.
+   */
+  async findOrCreateSystemUser(
+    data: Omit<UpsertUserData, 'active' | 'storeName'>,
+  ): Promise<AuthUser> {
+    const record = await UserModel.findOneAndUpdate(
+      { username: data.username.toLowerCase() },
+      { $setOnInsert: { ...data, storeName: null, active: false } },
+      { upsert: true, returnDocument: 'after', runValidators: true },
+    ).lean<UserRecord>()
+    return toAuthUser(record)
+  }
 }
