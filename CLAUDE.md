@@ -22,14 +22,16 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   `pnpm db:seed` crea los usuarios `admin` y `tienda` (contraseñas de desarrollo en `seed.ts`).
 - Integración con Amoenus Central (`modules/integrations/amoenus`): los pedidos a proveedor que hace un
   local en Amoenus llegan como solicitudes `pending` por `POST /api/v1/integrations/amoenus/orders`, con
-  clave de API (`AMOENUS_API_KEY`), artículos por código y `source` en el pedido. Pendiente: albarán de
-  vuelta, y si el login pasa a ser contra Amoenus (ver `docs/integracion-amoenus-central.md`).
+  clave de API (`AMOENUS_API_KEY`), artículos por código y `source` en el pedido. Al aprobar se genera el
+  albarán (`modules/delivery-notes`, `ALB-AAAA-NNNN`) y, si el pedido es de Amoenus, se le envía el albarán
+  o el rechazo (`AmoenusSyncService`, `AMOENUS_API_URL`, reintento cada 5 min y «Reenviar a Amoenus»).
+  Pendiente: si el login pasa a ser contra Amoenus (ver `docs/integracion-amoenus-central.md`).
 - Pedidos (`orders`): pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (filtro
   multiestado, orden por fecha de creación, Aprobar/Editar por fila) y ficha con aprobación (ajustando
   cantidades → `modified`), rechazo con motivo y cancelación por la tienda. Sin módulo `stores` aún:
   el pedido guarda el `storeName` del usuario.
 - Descartado: las pantallas Historial, Entregas e Incidencias no forman parte de la aplicación.
-- Siguiente: módulo `stores`, preparación/entrega y albarán PDF.
+- Siguiente: módulo `stores`, preparación/entrega y albarán PDF (el albarán ya existe en datos).
 
 ## Reglas de código
 

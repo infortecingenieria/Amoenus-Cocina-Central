@@ -1,7 +1,10 @@
 import {
+  AMOENUS_SYNC_EVENTS,
+  AMOENUS_SYNC_STATUSES,
   ORDER_SOURCE_SYSTEMS,
   ORDER_STATUSES,
   PACKAGE_FORMATS,
+  type AmoenusSync,
   type OrderSource,
   type OrderStatus,
   type PackageFormat,
@@ -27,6 +30,11 @@ export interface OrderStatusEntryRecord {
   reason: string | null
 }
 
+export type AmoenusSyncRecord = Omit<AmoenusSync, 'lastAttemptAt' | 'sentAt'> & {
+  lastAttemptAt: Date | null
+  sentAt: Date | null
+}
+
 export interface OrderRecord {
   _id: Types.ObjectId
   number: string
@@ -35,6 +43,10 @@ export interface OrderRecord {
   notes: string | null
   /** Ausente o null en los pedidos hechos desde esta aplicación. */
   source?: OrderSource | null
+  /** Albarán generado al aprobar. */
+  deliveryNote?: { id: Types.ObjectId; number: string } | null
+  /** Envío a Amoenus del albarán o del rechazo (solo pedidos que vienen de allí). */
+  amoenusSync?: AmoenusSyncRecord | null
   lines: OrderLineRecord[]
   statusHistory: OrderStatusEntryRecord[]
   createdBy: { id: Types.ObjectId; displayName: string }
@@ -77,6 +89,26 @@ const orderSourceSchema = new Schema<OrderSource>(
   { _id: false },
 )
 
+const deliveryNoteRefSchema = new Schema<NonNullable<OrderRecord['deliveryNote']>>(
+  {
+    id: { type: Schema.Types.ObjectId, ref: 'DeliveryNote', required: true },
+    number: { type: String, required: true },
+  },
+  { _id: false },
+)
+
+const amoenusSyncSchema = new Schema<AmoenusSyncRecord>(
+  {
+    event: { type: String, enum: AMOENUS_SYNC_EVENTS, required: true },
+    status: { type: String, enum: AMOENUS_SYNC_STATUSES, required: true },
+    attempts: { type: Number, required: true, default: 0 },
+    lastError: { type: String, default: null },
+    lastAttemptAt: { type: Date, default: null },
+    sentAt: { type: Date, default: null },
+  },
+  { _id: false },
+)
+
 const orderSchema = new Schema<OrderRecord>(
   {
     number: { type: String, required: true },
@@ -84,6 +116,8 @@ const orderSchema = new Schema<OrderRecord>(
     status: { type: String, enum: ORDER_STATUSES, required: true, default: 'pending' },
     notes: { type: String, default: null },
     source: { type: orderSourceSchema, default: null },
+    deliveryNote: { type: deliveryNoteRefSchema, default: null },
+    amoenusSync: { type: amoenusSyncSchema, default: null },
     lines: { type: [orderLineSchema], required: true },
     statusHistory: { type: [orderStatusEntrySchema], default: [] },
     createdBy: {
@@ -102,6 +136,8 @@ orderSchema.index(
   { 'source.system': 1, 'source.externalOrderId': 1 },
   { unique: true, partialFilterExpression: { 'source.externalOrderId': { $exists: true } } },
 )
+// Envíos a Amoenus pendientes de reintentar.
+orderSchema.index({ 'amoenusSync.status': 1 })
 // Para saber si un artículo ya se ha pedido (no se puede borrar).
 orderSchema.index({ 'lines.saleArticleId': 1 })
 

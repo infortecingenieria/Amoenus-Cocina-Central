@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { objectIdSchema } from '../common/primitives'
+import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { MAX_ORDER_LINE_QUANTITY } from '../orders/order.schemas'
 import { SALE_ARTICLE_CODE_PATTERN } from '../sale-articles/sale-article.schemas'
 
@@ -54,3 +54,37 @@ export const amoenusOrderSchema = z.object({
 })
 export type AmoenusOrderInput = z.input<typeof amoenusOrderSchema>
 export type AmoenusOrderData = z.output<typeof amoenusOrderSchema>
+
+// --- Envíos de Cocina Central a Amoenus ------------------------------------------------------
+
+/** Albarán que se envía a Amoenus al aprobar un pedido suyo: el pedido se corrige con lo servido. */
+export const amoenusDeliveryNotePayloadSchema = z.object({
+  /** `_id` del pedido a proveedor en Amoenus (`source.externalOrderId`). */
+  externalOrderId: z.string(),
+  /** Número del pedido en Cocina Central («PED-2026-0001»), que Amoenus guarda en `orderCode`. */
+  orderNumber: z.string(),
+  deliveryNote: z.object({
+    number: z.string(),
+    issuedAt: isoDateTimeSchema,
+    lines: z.array(
+      z.object({
+        code: z.string(),
+        name: z.string(),
+        requestedQty: z.number().int(),
+        deliveredQty: z.number().int(),
+        unitPrice: z.number(),
+      }),
+    ),
+  }),
+})
+export type AmoenusDeliveryNotePayload = z.infer<typeof amoenusDeliveryNotePayloadSchema>
+
+/** Rechazo de un pedido de Amoenus: allí queda marcado como rechazado y no se puede recepcionar. */
+export const amoenusRejectionPayloadSchema = z.object({
+  externalOrderId: z.string(),
+  orderNumber: z.string(),
+  reason: z.string(),
+  rejectedAt: isoDateTimeSchema,
+  rejectedBy: z.string(),
+})
+export type AmoenusRejectionPayload = z.infer<typeof amoenusRejectionPayloadSchema>

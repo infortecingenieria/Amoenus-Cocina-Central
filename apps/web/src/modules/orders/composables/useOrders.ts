@@ -77,3 +77,11 @@ export function useCancelOrder() {
     onSuccess: onSaved,
   })
 }
+
+export function useResendToAmoenus() {
+  const onSaved = useOnOrderSaved()
+  return useMutation({
+    mutationFn: (id: string) => ordersApi.resendToAmoenus(id),
+    onSuccess: onSaved,
+  })
+}

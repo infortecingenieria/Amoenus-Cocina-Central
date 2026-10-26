@@ -1,7 +1,7 @@
 # Integración con Amoenus Central
 
-> Estado: **pedidos Amoenus → Cocina Central implementados** (opción A, AM-903). El resto (albarán
-> de vuelta, tiendas, login) sigue pendiente. Más abajo, lo que ya ofrece Amoenus Central (Portal
+> Estado: **pedidos Amoenus → Cocina Central y albarán/rechazo de vuelta implementados** (opción A,
+> AM-903). Tiendas y login siguen pendientes. Más abajo, lo que ya ofrece Amoenus Central (Portal
 > Corporativo) y las opciones que se valoraron.
 
 ## Pedidos de Amoenus → solicitudes en Cocina Central
@@ -31,9 +31,40 @@ Amoenus (warehouses, OrderSupplier.createOrder)
   activa el envío para un cliente y proveedor. El pedido se envía antes de guardarlo: si Cocina Central no
   responde o lo rechaza, no se guarda en Amoenus y el usuario ve el motivo. El número `PED-…` queda en
   `orderCode` del pedido de Amoenus.
-- **Pendiente**: modificar o cancelar el pedido desde Amoenus, el albarán de vuelta y la entrada en
-  Amoenus. Si la respuesta se pierde por un timeout y el usuario reintenta, el pedido se duplica (Amoenus
-  genera un id nuevo en cada intento): el obrador rechazaría el sobrante.
+- **En Amoenus** el pedido enviado ya no se puede modificar ni borrar (como Florette/Conway).
+- **Pendiente**: si la respuesta se pierde por un timeout y el usuario reintenta, el pedido se duplica
+  (Amoenus genera un id nuevo en cada intento): el obrador rechazaría el sobrante.
+
+## Albarán y rechazo de Cocina Central → Amoenus
+
+Al **aprobar** un pedido (con o sin cambios) se genera su albarán (`delivery_notes`, número
+`ALB-AAAA-NNNN`, uno por pedido) con lo pedido y lo servido (`confirmedQty`). Si el pedido viene de
+Amoenus, se le envía en el momento; al **rechazarlo**, se envía el rechazo con el motivo. Funciona
+como el albarán de Conway en Amoenus, pero sin cron: lo empuja Cocina Central.
+
+```
+Cocina Central (OrderService.approve / reject → AmoenusSyncService)
+  └─ POST {AMOENUS_API_URL}/warehouses/cocina-central/delivery-notes   X-Api-Key: <AMOENUS_API_KEY>
+       { externalOrderId, orderNumber, deliveryNote: { number, issuedAt,
+         lines: [{ code, name, requestedQty, deliveredQty, unitPrice }] } }
+  └─ POST {AMOENUS_API_URL}/warehouses/cocina-central/rejections
+       { externalOrderId, orderNumber, reason, rejectedAt, rejectedBy }
+  ◄─ 200 { success: true } · 400 { success: false, message }
+```
+
+- **Configuración**: `AMOENUS_API_URL` = gateway de Amoenus con `/api` (en local
+  `http://localhost:4547/api`) y la misma `AMOENUS_API_KEY`. En Amoenus, la ruta no lleva sesión: la
+  clave identifica la fila de `cocinacentralconfigs` (cliente + proveedor) y solo acepta pedidos de ese
+  cliente a ese proveedor marcados `cocinaCentral`.
+- **Si Amoenus no responde**, el pedido queda aprobado o rechazado igualmente y el envío queda en
+  `order.amoenusSync` (`pending` → `sent` / `failed`, con `attempts` y `lastError`). `server.ts`
+  reintenta los no enviados cada 5 minutos y el obrador puede pulsar «Reenviar a Amoenus» en la ficha
+  (`POST /api/v1/orders/:id/amoenus-sync`). Amoenus es idempotente: un reenvío sustituye el albarán.
+- **En Amoenus** el albarán se guarda como `GlobalDeliveryNote` (pedido = `serviceUnit`, servido =
+  `quantityServiceUnit`, precio de Cocina Central) enlazado al pedido por `globalDeliveryNoteId`, y el
+  pedido se autocorrige con lo servido (las líneas a 0 se quitan). En Gestión de pedidos sale el botón
+  del albarán (en rojo si hay cambios) en lugar de «Recepcionar pedido», y la entrada se crea a mano
+  desde él. Un rechazo marca el pedido `rejected` con `cocinaCentralRejection` (motivo, fecha, usuario).
 
 ## Qué existe hoy en Amoenus Central
 

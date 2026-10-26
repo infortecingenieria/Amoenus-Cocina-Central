@@ -4,9 +4,10 @@ import {
   formatPackage,
   isEditableByStore,
   orderLineTotal,
+  type AmoenusSync,
   type Order,
 } from '@cocina-central/shared'
-import { ArrowLeftIcon, CheckIcon, CircleXIcon, XIcon } from '@lucide/vue'
+import { ArrowLeftIcon, CheckIcon, CircleXIcon, RefreshCwIcon, XIcon } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -41,7 +42,7 @@ import ApproveOrderDialog from '../components/ApproveOrderDialog.vue'
 import OrderQuantityField from '../components/OrderQuantityField.vue'
 import OrderStatusBadge from '../components/OrderStatusBadge.vue'
 import RejectOrderDialog from '../components/RejectOrderDialog.vue'
-import { useCancelOrder, useOrder } from '../composables/useOrders'
+import { useCancelOrder, useOrder, useResendToAmoenus } from '../composables/useOrders'
 import { showOrderError } from '../order-errors'
 
 const route = useRoute()
@@ -118,6 +119,33 @@ async function cancel(current: Order) {
     showOrderError(err)
   } finally {
     cancelling.value = false
+  }
+}
+
+// Envío a Amoenus del albarán o del rechazo (pedidos que vienen de allí). Solo lo ve el obrador.
+const AMOENUS_SYNC_EVENT_LABELS: Record<AmoenusSync['event'], string> = {
+  delivery_note: 'Albarán',
+  rejection: 'Rechazo',
+}
+const AMOENUS_SYNC_STATUS_LABELS: Record<AmoenusSync['status'], string> = {
+  pending: 'pendiente de enviar',
+  sent: 'enviado',
+  failed: 'no se ha podido enviar',
+}
+const amoenusSync = computed(() => (session.isKitchenAdmin ? order.value?.amoenusSync : null))
+
+const resendMutation = useResendToAmoenus()
+
+async function resendToAmoenus(current: Order) {
+  try {
+    const updated = await resendMutation.mutateAsync(current.id)
+    if (updated.amoenusSync?.status === 'sent') {
+      toast.success(`Pedido ${current.number} enviado a Amoenus`)
+    } else {
+      toast.error(`No se ha podido enviar a Amoenus: ${updated.amoenusSync?.lastError ?? ''}`)
+    }
+  } catch (err) {
+    showOrderError(err)
   }
 }
 </script>
@@ -204,9 +232,40 @@ async function cancel(current: Order) {
         <p class="whitespace-pre-line">{{ statusNote.reason }}</p>
       </div>
 
-      <dl>
-        <dt class="text-sm text-muted-foreground">Notas de la tienda</dt>
-        <dd class="whitespace-pre-line">{{ order.notes ?? '—' }}</dd>
+      <dl class="grid gap-4 sm:grid-cols-3">
+        <div>
+          <dt class="text-sm text-muted-foreground">Notas de la tienda</dt>
+          <dd class="whitespace-pre-line">{{ order.notes ?? '—' }}</dd>
+        </div>
+        <div v-if="order.deliveryNote">
+          <dt class="text-sm text-muted-foreground">Albarán</dt>
+          <dd class="font-mono">{{ order.deliveryNote.number }}</dd>
+        </div>
+        <div v-if="amoenusSync">
+          <dt class="text-sm text-muted-foreground">Envío a Amoenus</dt>
+          <dd class="flex flex-wrap items-center gap-2">
+            <span :class="cn(amoenusSync.status === 'failed' && 'text-destructive')">
+              {{ AMOENUS_SYNC_EVENT_LABELS[amoenusSync.event] }}
+              {{ AMOENUS_SYNC_STATUS_LABELS[amoenusSync.status] }}
+              <template v-if="amoenusSync.sentAt">
+                el {{ formatDateTime(amoenusSync.sentAt) }}
+              </template>
+            </span>
+            <Button
+              v-if="amoenusSync.status !== 'sent'"
+              variant="outline"
+              size="sm"
+              :disabled="resendMutation.isPending.value"
+              @click="resendToAmoenus(order)"
+            >
+              <RefreshCwIcon />
+              Reenviar a Amoenus
+            </Button>
+          </dd>
+          <dd v-if="amoenusSync.lastError" class="text-sm text-muted-foreground">
+            {{ amoenusSync.lastError }} · se reintenta cada 5 minutos
+          </dd>
+        </div>
       </dl>
 
       <p v-if="canValidate" class="text-sm text-muted-foreground">

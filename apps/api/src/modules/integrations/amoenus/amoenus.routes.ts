@@ -6,6 +6,8 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 
 import { UnauthorizedError } from '../../../shared/errors'
 import { UserRepository } from '../../auth/user.repository'
+import { DeliveryNoteRepository } from '../../delivery-notes/delivery-note.repository'
+import { DeliveryNoteService } from '../../delivery-notes/delivery-note.service'
 import { OrderRepository } from '../../orders/order.repository'
 import { OrderService } from '../../orders/order.service'
 import { SaleArticleRepository } from '../../sale-articles/sale-article.repository'
@@ -37,7 +39,12 @@ export const amoenusIntegrationRoutes: FastifyPluginAsyncZod<AmoenusRoutesOption
   const saleArticles = new SaleArticleRepository()
   const controller = new AmoenusIntegrationController(
     new AmoenusIntegrationService(
-      new OrderService(orderRepository, saleArticles),
+      new OrderService(
+        orderRepository,
+        saleArticles,
+        new DeliveryNoteService(new DeliveryNoteRepository()),
+        app.amoenusSync,
+      ),
       orderRepository,
       saleArticles,
       new UserRepository(),

@@ -6,6 +6,7 @@ import type {
   getOrderRoute,
   listOrdersRoute,
   rejectOrderRoute,
+  resendToAmoenusRoute,
 } from './order.schemas'
 import type { OrderService } from './order.service'
 
@@ -36,4 +37,7 @@ export class OrderController {
 
   cancel = async (request: ZodRequest<typeof cancelOrderRoute>) =>
     this.service.cancel(request.params.id, request.user)
+
+  resendToAmoenus = async (request: ZodRequest<typeof resendToAmoenusRoute>) =>
+    this.service.resendToAmoenus(request.params.id, request.user)
 }

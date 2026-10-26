@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { paginatedSchema, paginationQuerySchema } from '../common/pagination'
+import { deliveryNoteRefSchema } from '../delivery-notes/delivery-note.schemas'
 import { packageFormatSchema } from '../sale-articles/package-format'
 import { orderStatusSchema, type OrderStatus } from './order-status'
 
@@ -115,6 +116,22 @@ export const orderSourceSchema = z.object({
 })
 export type OrderSource = z.infer<typeof orderSourceSchema>
 
+/** Qué se comunica a Amoenus de un pedido que viene de allí: el albarán al aprobar o el rechazo. */
+export const AMOENUS_SYNC_EVENTS = ['delivery_note', 'rejection'] as const
+export const AMOENUS_SYNC_STATUSES = ['pending', 'sent', 'failed'] as const
+export type AmoenusSyncStatus = (typeof AMOENUS_SYNC_STATUSES)[number]
+
+/** Estado del envío a Amoenus. Si falla, el obrador ya ha resuelto el pedido y se reintenta. */
+export const amoenusSyncSchema = z.object({
+  event: z.enum(AMOENUS_SYNC_EVENTS),
+  status: z.enum(AMOENUS_SYNC_STATUSES),
+  attempts: z.number().int(),
+  lastError: z.string().nullable(),
+  lastAttemptAt: isoDateTimeSchema.nullable(),
+  sentAt: isoDateTimeSchema.nullable(),
+})
+export type AmoenusSync = z.infer<typeof amoenusSyncSchema>
+
 const orderBaseSchema = z.object({
   id: objectIdSchema,
   /** Número correlativo por año: «PED-2026-0001». */
@@ -125,6 +142,10 @@ const orderBaseSchema = z.object({
   notes: z.string().nullable(),
   /** null = lo ha hecho la tienda desde esta aplicación. */
   source: orderSourceSchema.nullable(),
+  /** Albarán generado al aprobar; null mientras el pedido no se ha aprobado. */
+  deliveryNote: deliveryNoteRefSchema.nullable(),
+  /** Solo en los pedidos que vienen de Amoenus y ya se han resuelto (aprobado o rechazado). */
+  amoenusSync: amoenusSyncSchema.nullable(),
   /** Importe con las cantidades confirmadas o, si aún no las hay, las pedidas. */
   total: z.number(),
   createdBy: z.object({ id: objectIdSchema, displayName: z.string() }),

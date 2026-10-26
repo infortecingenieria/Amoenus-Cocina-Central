@@ -55,3 +55,10 @@ export const cancelOrderRoute = {
   params: idParamsSchema,
   response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
 }
+
+export const resendToAmoenusRoute = {
+  tags,
+  summary: 'Reenvía a Amoenus el albarán o el rechazo de un pedido que viene de allí',
+  params: idParamsSchema,
+  response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
+}

@@ -1,5 +1,7 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 
+import { DeliveryNoteRepository } from '../delivery-notes/delivery-note.repository'
+import { DeliveryNoteService } from '../delivery-notes/delivery-note.service'
 import { SaleArticleRepository } from '../sale-articles/sale-article.repository'
 import { OrderController } from './order.controller'
 import { OrderRepository } from './order.repository'
@@ -10,12 +12,18 @@ import {
   getOrderRoute,
   listOrdersRoute,
   rejectOrderRoute,
+  resendToAmoenusRoute,
 } from './order.schemas'
 import { OrderService } from './order.service'
 
 export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   const controller = new OrderController(
-    new OrderService(new OrderRepository(), new SaleArticleRepository()),
+    new OrderService(
+      new OrderRepository(),
+      new SaleArticleRepository(),
+      new DeliveryNoteService(new DeliveryNoteRepository()),
+      app.amoenusSync,
+    ),
   )
 
   // La tienda hace y cancela sus pedidos; el obrador los valida. Consultar: los dos.
@@ -36,4 +44,9 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
     controller.reject,
   )
   app.post('/:id/cancel', { schema: cancelOrderRoute, preHandler: onlyStore }, controller.cancel)
+  app.post(
+    '/:id/amoenus-sync',
+    { schema: resendToAmoenusRoute, preHandler: onlyKitchenAdmin },
+    controller.resendToAmoenus,
+  )
 }

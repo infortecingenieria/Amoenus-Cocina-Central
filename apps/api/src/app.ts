@@ -10,9 +10,16 @@ import {
 
 import type { AppConfig } from './config/env'
 import { authRoutes } from './modules/auth/auth.routes'
+import { DeliveryNoteRepository } from './modules/delivery-notes/delivery-note.repository'
 import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
+import { AmoenusSyncService } from './modules/integrations/amoenus/amoenus-sync.service'
+import {
+  HttpAmoenusClient,
+  type AmoenusClient,
+} from './modules/integrations/amoenus/amoenus.client'
 import { amoenusIntegrationRoutes } from './modules/integrations/amoenus/amoenus.routes'
+import { OrderRepository } from './modules/orders/order.repository'
 import { orderRoutes } from './modules/orders/order.routes'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
 import { authPlugin } from './plugins/auth'
@@ -28,7 +35,18 @@ export type AppOptions = Pick<
   | 'jwtSecret'
   | 'jwtExpiresIn'
   | 'amoenusApiKey'
->
+  | 'amoenusApiUrl'
+> & {
+  /** Sustituye al cliente HTTP de Amoenus (tests). */
+  amoenusClient?: AmoenusClient
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** Envíos a Amoenus (albaranes y rechazos); `server.ts` reintenta los pendientes. */
+    amoenusSync: AmoenusSyncService
+  }
+}
 
 const buildLogger = ({ nodeEnv, logLevel }: AppOptions): FastifyServerOptions['logger'] => {
   if (nodeEnv === 'test') return false
@@ -88,6 +106,16 @@ export async function buildApp(options: AppOptions) {
     jwtExpiresIn: options.jwtExpiresIn,
   })
   if (options.docsEnabled) await registerSwagger(app)
+
+  app.decorate(
+    'amoenusSync',
+    new AmoenusSyncService(
+      new OrderRepository(),
+      new DeliveryNoteRepository(),
+      options.amoenusClient ??
+        new HttpAmoenusClient({ baseUrl: options.amoenusApiUrl, apiKey: options.amoenusApiKey }),
+    ),
+  )
 
   await app.register(healthRoutes)
   await app.register(apiV1Routes, { prefix: '/api/v1', amoenusApiKey: options.amoenusApiKey })

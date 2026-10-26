@@ -1,8 +1,13 @@
-import type { UserRole } from '@cocina-central/shared'
+import type {
+  AmoenusDeliveryNotePayload,
+  AmoenusRejectionPayload,
+  UserRole,
+} from '@cocina-central/shared'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import mongoose from 'mongoose'
 
 import { buildApp, type App } from '../../src/app'
+import type { AmoenusClient } from '../../src/modules/integrations/amoenus/amoenus.client'
 
 export interface TestContext {
   app: App
@@ -20,8 +25,36 @@ const TEST_USER_IDS: Record<UserRole, string> = {
 /** Clave de API de Amoenus con la que arranca la app de pruebas. */
 export const TEST_AMOENUS_API_KEY = 'clave-de-amoenus-de-pruebas-de-al-menos-32-caracteres'
 
+/**
+ * Cliente de Amoenus de pruebas: guarda lo que se le envía y, con `failing`, simula que Amoenus
+ * no responde.
+ */
+export class FakeAmoenusClient implements AmoenusClient {
+  deliveryNotes: AmoenusDeliveryNotePayload[] = []
+  rejections: AmoenusRejectionPayload[] = []
+  failing = false
+
+  async sendDeliveryNote(payload: AmoenusDeliveryNotePayload): Promise<void> {
+    if (this.failing) throw new Error('Amoenus no está disponible')
+    this.deliveryNotes.push(payload)
+  }
+
+  async sendRejection(payload: AmoenusRejectionPayload): Promise<void> {
+    if (this.failing) throw new Error('Amoenus no está disponible')
+    this.rejections.push(payload)
+  }
+
+  reset(): void {
+    this.deliveryNotes = []
+    this.rejections = []
+    this.failing = false
+  }
+}
+
 /** Levanta la app contra un MongoDB en memoria, aislado por fichero de test. */
-export async function createTestApp(): Promise<TestContext> {
+export async function createTestApp({
+  amoenusClient = new FakeAmoenusClient(),
+}: { amoenusClient?: AmoenusClient } = {}): Promise<TestContext> {
   const mongo = await MongoMemoryServer.create()
   await mongoose.connect(mongo.getUri())
   await mongoose.connection.syncIndexes()
@@ -34,6 +67,8 @@ export async function createTestApp(): Promise<TestContext> {
     jwtSecret: 'clave-de-pruebas-de-al-menos-32-caracteres',
     jwtExpiresIn: '1h',
     amoenusApiKey: TEST_AMOENUS_API_KEY,
+    amoenusApiUrl: null,
+    amoenusClient,
   })
   await app.ready()
 

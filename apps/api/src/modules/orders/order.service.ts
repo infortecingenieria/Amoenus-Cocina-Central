@@ -15,6 +15,7 @@ import {
 } from '@cocina-central/shared'
 
 import { nextSequence } from '../../database/counter'
+import { currentYear } from '../../shared/business-time'
 import {
   ForbiddenError,
   InvalidStateError,
@@ -22,17 +23,10 @@ import {
   ValidationError,
   type ValidationIssue,
 } from '../../shared/errors'
+import type { DeliveryNoteService } from '../delivery-notes/delivery-note.service'
+import type { AmoenusSyncService } from '../integrations/amoenus/amoenus-sync.service'
 import type { SaleArticleRepository } from '../sale-articles/sale-article.repository'
 import type { OrderRepository } from './order.repository'
-
-/** Zona horaria del negocio: decide en qué año se numera un pedido hecho en Nochevieja. */
-const BUSINESS_TIME_ZONE = 'Europe/Madrid'
-
-/** Año actual como «2026». */
-const currentYear = (): string =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TIME_ZONE, year: 'numeric' }).format(
-    new Date(),
-  )
 
 /** «PED-2026-0001» */
 const formatOrderNumber = (year: string, sequence: number): string =>
@@ -61,10 +55,19 @@ const ACTION_VERBS: Partial<Record<OrderStatus, string>> = {
 export class OrderService {
   private readonly repository: OrderRepository
   private readonly saleArticles: SaleArticleRepository
+  private readonly deliveryNotes: DeliveryNoteService
+  private readonly amoenusSync: AmoenusSyncService
 
-  constructor(repository: OrderRepository, saleArticles: SaleArticleRepository) {
+  constructor(
+    repository: OrderRepository,
+    saleArticles: SaleArticleRepository,
+    deliveryNotes: DeliveryNoteService,
+    amoenusSync: AmoenusSyncService,
+  ) {
     this.repository = repository
     this.saleArticles = saleArticles
+    this.deliveryNotes = deliveryNotes
+    this.amoenusSync = amoenusSync
   }
 
   /** La tienda solo ve sus pedidos; el obrador, todos. */
@@ -146,25 +149,53 @@ export class OrderService {
       throw new ValidationError('Para no servir ningún artículo, rechaza el pedido')
     }
 
-    if (lines.some((line) => line.confirmedQty !== line.requestedQty)) {
-      if (!data.reason) {
-        const message = 'Indica el motivo de los cambios'
-        throw new ValidationError(message, [{ path: '/reason', message }])
-      }
-      return this.applyTransition(order, 'modified', user, { lines, reason: data.reason })
+    const modified = lines.some((line) => line.confirmedQty !== line.requestedQty)
+    if (modified && !data.reason) {
+      const message = 'Indica el motivo de los cambios'
+      throw new ValidationError(message, [{ path: '/reason', message }])
     }
-    return this.applyTransition(order, 'approved', user, { lines })
+    const approved = modified
+      ? await this.applyTransition(order, 'modified', user, { lines, reason: data.reason })
+      : await this.applyTransition(order, 'approved', user, { lines })
+
+    // Al aprobar se emite el albarán con lo que se sirve y, si el pedido es de Amoenus, se le envía.
+    const deliveryNote = await this.deliveryNotes.createForOrder(approved)
+    await this.repository.setDeliveryNote(approved.id, {
+      id: deliveryNote.id,
+      number: deliveryNote.number,
+    })
+    await this.amoenusSync.queue(approved, 'delivery_note')
+    return this.reload(approved.id)
   }
 
   async reject(id: string, { reason }: RejectOrderInput, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
-    return this.applyTransition(order, 'rejected', user, { reason })
+    const rejected = await this.applyTransition(order, 'rejected', user, { reason })
+    await this.amoenusSync.queue(rejected, 'rejection')
+    return this.reload(rejected.id)
+  }
+
+  /** Reenvía a Amoenus el albarán o el rechazo de un pedido suyo (p. ej. si Amoenus no respondía). */
+  async resendToAmoenus(id: string, user: AuthUser): Promise<Order> {
+    const order = await this.getById(id, user)
+    if (!order.amoenusSync) {
+      throw new InvalidStateError(`El pedido ${order.number} no tiene nada que enviar a Amoenus`)
+    }
+    await this.amoenusSync.send(order.id)
+    return this.reload(order.id)
   }
 
   /** Solo la tienda que lo hizo y solo mientras el obrador no lo ha tramitado. */
   async cancel(id: string, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
     return this.applyTransition(order, 'cancelled', user)
+  }
+
+  /** El pedido tal y como ha quedado tras guardar el albarán o el envío a Amoenus. */
+  private async reload(id: string): Promise<Order> {
+    const order = await this.repository.findById(id)
+    if (!order) throw new NotFoundError('Pedido no encontrado')
+    return order
   }
 
   /** `undefined` = sin restricción (obrador). */

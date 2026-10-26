@@ -29,6 +29,8 @@ const envSchema = z.object({
     .string()
     .min(32, 'AMOENUS_API_KEY debe tener al menos 32 caracteres')
     .optional(),
+  /** Gateway de Amoenus Central, con `/api`, al que se envían albaranes y rechazos. */
+  AMOENUS_API_URL: z.url('AMOENUS_API_URL debe ser una URL').optional(),
 })
 
 export interface AppConfig {
@@ -43,6 +45,8 @@ export interface AppConfig {
   jwtExpiresIn: string
   /** null = integración con Amoenus desactivada. */
   amoenusApiKey: string | null
+  /** null = no se envían albaranes ni rechazos a Amoenus (quedan pendientes). */
+  amoenusApiUrl: string | null
 }
 
 /** Lee y valida las variables de entorno. Si hay un `.env` en el directorio actual, se carga antes. */
@@ -70,5 +74,6 @@ export function loadConfig(): AppConfig {
     jwtSecret: env.JWT_SECRET,
     jwtExpiresIn: env.JWT_EXPIRES_IN,
     amoenusApiKey: env.AMOENUS_API_KEY ?? null,
+    amoenusApiUrl: env.AMOENUS_API_URL ?? null,
   }
 }

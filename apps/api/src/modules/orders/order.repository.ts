@@ -1,6 +1,8 @@
 import {
   calculateOrderTotal,
   calculateTotalQuantity,
+  type AmoenusSync,
+  type DeliveryNoteRef,
   type Order,
   type OrderLine,
   type OrderSort,
@@ -15,6 +17,7 @@ import { isValidObjectId, Types, type QueryFilter } from 'mongoose'
 import { escapeRegExp } from '../../shared/http'
 import {
   OrderModel,
+  type AmoenusSyncRecord,
   type OrderLineRecord,
   type OrderRecord,
   type OrderStatusEntryRecord,
@@ -77,6 +80,21 @@ const toEntryRecord = (entry: OrderStatusEntry): OrderStatusEntryRecord => ({
   userId: new Types.ObjectId(entry.userId),
 })
 
+const toAmoenusSync = (sync: AmoenusSyncRecord): AmoenusSync => ({
+  event: sync.event,
+  status: sync.status,
+  attempts: sync.attempts,
+  lastError: sync.lastError,
+  lastAttemptAt: sync.lastAttemptAt?.toISOString() ?? null,
+  sentAt: sync.sentAt?.toISOString() ?? null,
+})
+
+const toAmoenusSyncRecord = (sync: AmoenusSync): AmoenusSyncRecord => ({
+  ...sync,
+  lastAttemptAt: sync.lastAttemptAt ? new Date(sync.lastAttemptAt) : null,
+  sentAt: sync.sentAt ? new Date(sync.sentAt) : null,
+})
+
 const toSummaryBase = (record: OrderSummaryRecord) => ({
   id: record._id.toString(),
   number: record.number,
@@ -91,6 +109,10 @@ const toSummaryBase = (record: OrderSummaryRecord) => ({
         localId: record.source.localId,
       }
     : null,
+  deliveryNote: record.deliveryNote
+    ? { id: record.deliveryNote.id.toString(), number: record.deliveryNote.number }
+    : null,
+  amoenusSync: record.amoenusSync ? toAmoenusSync(record.amoenusSync) : null,
   total: calculateOrderTotal(record.lines),
   createdBy: { id: record.createdBy.id.toString(), displayName: record.createdBy.displayName },
   createdAt: record.createdAt.toISOString(),
@@ -153,6 +175,36 @@ export class OrderRepository {
       'source.externalOrderId': externalOrderId,
     }).lean<OrderRecord>()
     return record ? toOrder(record) : null
+  }
+
+  /** Ids de los pedidos con un envío a Amoenus sin completar (pendiente o fallido). */
+  async findIdsWithUnsentAmoenusSync(): Promise<string[]> {
+    const records = await OrderModel.find(
+      { 'amoenusSync.status': { $in: ['pending', 'failed'] } },
+      { _id: 1 },
+    )
+      .sort({ updatedAt: 1 })
+      .lean<{ _id: Types.ObjectId }[]>()
+    return records.map((record) => record._id.toString())
+  }
+
+  async setDeliveryNote(id: string, deliveryNote: DeliveryNoteRef): Promise<void> {
+    await OrderModel.updateOne(
+      { _id: id },
+      {
+        $set: {
+          deliveryNote: { id: new Types.ObjectId(deliveryNote.id), number: deliveryNote.number },
+        },
+      },
+    )
+  }
+
+  async setAmoenusSync(id: string, sync: AmoenusSync): Promise<void> {
+    await OrderModel.updateOne(
+      { _id: id },
+      { $set: { amoenusSync: toAmoenusSyncRecord(sync) } },
+      { runValidators: true },
+    )
   }
 
   async existsWithArticle(saleArticleId: string): Promise<boolean> {
