@@ -1,11 +1,9 @@
 import {
-  AMOENUS_SYNC_EVENTS,
+  AMOENUS_ORDER_ORIGINS,
   AMOENUS_SYNC_STATUSES,
-  ORDER_SOURCE_SYSTEMS,
   ORDER_STATUSES,
   PACKAGE_FORMATS,
   type AmoenusSync,
-  type OrderSource,
   type OrderStatus,
   type PackageFormat,
 } from '@cocina-central/shared'
@@ -31,8 +29,18 @@ export interface OrderStatusEntryRecord {
 }
 
 export type AmoenusSyncRecord = Omit<AmoenusSync, 'lastAttemptAt' | 'sentAt'> & {
-  lastAttemptAt: Date | null
+  lastAttemptAt: Date
   sentAt: Date | null
+}
+
+export type AmoenusLinkRecord = (
+  | { origin: 'amoenus_order'; externalOrderId: string; clientId: string }
+  | { origin: 'linked_store' }
+) & {
+  localId: string
+  sync: AmoenusSyncRecord | null
+  /** Hasta cuándo está reservado el envío a Amoenus por quien lo está haciendo; null = libre. */
+  sendingUntil: Date | null
 }
 
 export interface OrderRecord {
@@ -41,14 +49,10 @@ export interface OrderRecord {
   storeName: string
   status: OrderStatus
   notes: string | null
-  /** Ausente o null en los pedidos hechos desde esta aplicación. */
-  source?: OrderSource | null
-  /** Local de Amoenus de la tienda, si está vinculada (copia del usuario al crear el pedido). */
-  amoenusLocalId?: string | null
+  /** Vínculo con Amoenus; null en los pedidos de tiendas sin vincular. */
+  amoenus?: AmoenusLinkRecord | null
   /** Albarán generado al aprobar. */
   deliveryNote?: { id: Types.ObjectId; number: string } | null
-  /** Envío a Amoenus (pedidos que vienen de allí o de una tienda vinculada). */
-  amoenusSync?: AmoenusSyncRecord | null
   lines: OrderLineRecord[]
   statusHistory: OrderStatusEntryRecord[]
   createdBy: { id: Types.ObjectId; displayName: string }
@@ -81,16 +85,6 @@ const orderStatusEntrySchema = new Schema<OrderStatusEntryRecord>(
   { _id: false },
 )
 
-const orderSourceSchema = new Schema<OrderSource>(
-  {
-    system: { type: String, enum: ORDER_SOURCE_SYSTEMS, required: true },
-    externalOrderId: { type: String, required: true },
-    clientId: { type: String, required: true },
-    localId: { type: String, required: true },
-  },
-  { _id: false },
-)
-
 const deliveryNoteRefSchema = new Schema<NonNullable<OrderRecord['deliveryNote']>>(
   {
     id: { type: Schema.Types.ObjectId, ref: 'DeliveryNote', required: true },
@@ -101,12 +95,24 @@ const deliveryNoteRefSchema = new Schema<NonNullable<OrderRecord['deliveryNote']
 
 const amoenusSyncSchema = new Schema<AmoenusSyncRecord>(
   {
-    event: { type: String, enum: AMOENUS_SYNC_EVENTS, required: true },
     status: { type: String, enum: AMOENUS_SYNC_STATUSES, required: true },
-    attempts: { type: Number, required: true, default: 0 },
+    attempts: { type: Number, required: true },
     lastError: { type: String, default: null },
-    lastAttemptAt: { type: Date, default: null },
+    lastAttemptAt: { type: Date, required: true },
     sentAt: { type: Date, default: null },
+  },
+  { _id: false },
+)
+
+const amoenusLinkSchema = new Schema<AmoenusLinkRecord>(
+  {
+    origin: { type: String, enum: AMOENUS_ORDER_ORIGINS, required: true },
+    localId: { type: String, required: true },
+    // Solo en los que vienen de Amoenus (`amoenus_order`); sin default para no indexar nulls.
+    externalOrderId: { type: String },
+    clientId: { type: String },
+    sync: { type: amoenusSyncSchema, default: null },
+    sendingUntil: { type: Date, default: null },
   },
   { _id: false },
 )
@@ -117,10 +123,8 @@ const orderSchema = new Schema<OrderRecord>(
     storeName: { type: String, required: true },
     status: { type: String, enum: ORDER_STATUSES, required: true, default: 'pending' },
     notes: { type: String, default: null },
-    source: { type: orderSourceSchema, default: null },
-    amoenusLocalId: { type: String, default: null },
+    amoenus: { type: amoenusLinkSchema, default: null },
     deliveryNote: { type: deliveryNoteRefSchema, default: null },
-    amoenusSync: { type: amoenusSyncSchema, default: null },
     lines: { type: [orderLineSchema], required: true },
     statusHistory: { type: [orderStatusEntrySchema], default: [] },
     createdBy: {
@@ -134,13 +138,13 @@ const orderSchema = new Schema<OrderRecord>(
 orderSchema.index({ number: 1 }, { unique: true })
 orderSchema.index({ storeName: 1, createdAt: -1 })
 orderSchema.index({ status: 1, createdAt: -1 })
-// Un pedido de otro sistema entra una sola vez aunque se reenvíe.
+// Un pedido de Amoenus entra una sola vez aunque se reenvíe.
 orderSchema.index(
-  { 'source.system': 1, 'source.externalOrderId': 1 },
-  { unique: true, partialFilterExpression: { 'source.externalOrderId': { $exists: true } } },
+  { 'amoenus.externalOrderId': 1 },
+  { unique: true, partialFilterExpression: { 'amoenus.externalOrderId': { $type: 'string' } } },
 )
-// Envíos a Amoenus pendientes de reintentar.
-orderSchema.index({ 'amoenusSync.status': 1 })
+// Envíos a Amoenus pendientes (ver `findIdsPendingAmoenusSync`).
+orderSchema.index({ 'amoenus.origin': 1, status: 1 })
 // Para saber si un artículo ya se ha pedido (no se puede borrar).
 orderSchema.index({ 'lines.saleArticleId': 1 })
 

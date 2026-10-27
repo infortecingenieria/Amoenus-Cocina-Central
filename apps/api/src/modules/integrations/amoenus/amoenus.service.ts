@@ -44,7 +44,7 @@ export class AmoenusIntegrationService {
    * artículos se identifican por su código; si el pedido ya se recibió, se devuelve tal cual.
    */
   async receiveOrder(data: AmoenusOrderData): Promise<ReceivedOrder> {
-    const existing = await this.orderRepository.findBySource('amoenus', data.externalOrderId)
+    const existing = await this.orderRepository.findByAmoenusOrderId(data.externalOrderId)
     if (existing) return { order: existing, created: false }
 
     const articles = await this.saleArticles.findByCodes(data.lines.map((line) => line.code))
@@ -72,11 +72,12 @@ export class AmoenusIntegrationService {
         quantity: line.quantity,
       })),
       author: { id: author.id, displayName: `${data.createdByName} (Amoenus)` },
-      source: {
-        system: 'amoenus',
+      amoenus: {
+        origin: 'amoenus_order',
         externalOrderId: data.externalOrderId,
         clientId: data.clientId,
         localId: data.localId,
+        sync: null,
       },
     })
     return { order, created: true }

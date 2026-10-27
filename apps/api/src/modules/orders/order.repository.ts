@@ -1,12 +1,14 @@
 import {
+  AMOENUS_ORDER_ORIGINS,
+  AMOENUS_SYNCED_STATUSES,
   calculateOrderTotal,
   calculateTotalQuantity,
+  type AmoenusOrderLink,
   type AmoenusSync,
   type DeliveryNoteRef,
   type Order,
   type OrderLine,
   type OrderSort,
-  type OrderSource,
   type OrderStatus,
   type OrderStatusEntry,
   type OrderSummary,
@@ -17,6 +19,7 @@ import { isValidObjectId, Types, type QueryFilter } from 'mongoose'
 import { escapeRegExp } from '../../shared/http'
 import {
   OrderModel,
+  type AmoenusLinkRecord,
   type AmoenusSyncRecord,
   type OrderLineRecord,
   type OrderRecord,
@@ -35,18 +38,21 @@ export interface NewOrderData {
   number: string
   storeName: string
   notes: string | null
-  source: OrderSource | null
-  amoenusLocalId: string | null
+  amoenus: AmoenusOrderLink | null
   lines: OrderLine[]
   createdBy: { id: string; displayName: string }
   firstEntry: OrderStatusEntry
 }
 
-/** Cambio de estado: nuevo estado, entrada del historial y, al aprobar, las líneas confirmadas. */
+/**
+ * Cambio de estado: nuevo estado, entrada del historial y, al aprobar, las líneas confirmadas y el
+ * albarán. Todo se guarda en una sola escritura.
+ */
 export interface OrderTransition {
   status: OrderStatus
   entry: OrderStatusEntry
   lines?: OrderLine[]
+  deliveryNote?: DeliveryNoteRef
 }
 
 type OrderSummaryRecord = Omit<OrderRecord, 'statusHistory'>
@@ -82,18 +88,37 @@ const toEntryRecord = (entry: OrderStatusEntry): OrderStatusEntryRecord => ({
 })
 
 const toAmoenusSync = (sync: AmoenusSyncRecord): AmoenusSync => ({
-  event: sync.event,
   status: sync.status,
   attempts: sync.attempts,
   lastError: sync.lastError,
-  lastAttemptAt: sync.lastAttemptAt?.toISOString() ?? null,
+  lastAttemptAt: sync.lastAttemptAt.toISOString(),
   sentAt: sync.sentAt?.toISOString() ?? null,
 })
 
 const toAmoenusSyncRecord = (sync: AmoenusSync): AmoenusSyncRecord => ({
   ...sync,
-  lastAttemptAt: sync.lastAttemptAt ? new Date(sync.lastAttemptAt) : null,
+  lastAttemptAt: new Date(sync.lastAttemptAt),
   sentAt: sync.sentAt ? new Date(sync.sentAt) : null,
+})
+
+const toAmoenusLink = (record: AmoenusLinkRecord): AmoenusOrderLink => {
+  const sync = record.sync ? toAmoenusSync(record.sync) : null
+  if (record.origin === 'linked_store') {
+    return { origin: record.origin, localId: record.localId, sync }
+  }
+  return {
+    origin: record.origin,
+    externalOrderId: record.externalOrderId,
+    clientId: record.clientId,
+    localId: record.localId,
+    sync,
+  }
+}
+
+const toAmoenusLinkRecord = (link: AmoenusOrderLink): AmoenusLinkRecord => ({
+  ...link,
+  sync: link.sync ? toAmoenusSyncRecord(link.sync) : null,
+  sendingUntil: null,
 })
 
 const toSummaryBase = (record: OrderSummaryRecord) => ({
@@ -102,19 +127,10 @@ const toSummaryBase = (record: OrderSummaryRecord) => ({
   storeName: record.storeName,
   status: record.status,
   notes: record.notes,
-  source: record.source
-    ? {
-        system: record.source.system,
-        externalOrderId: record.source.externalOrderId,
-        clientId: record.source.clientId,
-        localId: record.source.localId,
-      }
-    : null,
-  amoenusLocalId: record.amoenusLocalId ?? null,
+  amoenus: record.amoenus ? toAmoenusLink(record.amoenus) : null,
   deliveryNote: record.deliveryNote
     ? { id: record.deliveryNote.id.toString(), number: record.deliveryNote.number }
     : null,
-  amoenusSync: record.amoenusSync ? toAmoenusSync(record.amoenusSync) : null,
   total: calculateOrderTotal(record.lines),
   createdBy: { id: record.createdBy.id.toString(), displayName: record.createdBy.displayName },
   createdAt: record.createdAt.toISOString(),
@@ -169,21 +185,26 @@ export class OrderRepository {
     return record ? toOrder(record) : null
   }
 
-  async findBySource(
-    system: OrderSource['system'],
-    externalOrderId: string,
-  ): Promise<Order | null> {
+  async findByAmoenusOrderId(externalOrderId: string): Promise<Order | null> {
     const record = await OrderModel.findOne({
-      'source.system': system,
-      'source.externalOrderId': externalOrderId,
+      'amoenus.externalOrderId': externalOrderId,
     }).lean<OrderRecord>()
     return record ? toOrder(record) : null
   }
 
-  /** Ids de los pedidos con un envío a Amoenus sin completar (pendiente o fallido). */
-  async findIdsWithUnsentAmoenusSync(): Promise<string[]> {
+  /**
+   * Ids de los pedidos con algo que comunicar a Amoenus (`AMOENUS_SYNCED_STATUSES`) que aún no se
+   * ha enviado: nunca intentado o fallido.
+   */
+  async findIdsPendingAmoenusSync(): Promise<string[]> {
     const records = await OrderModel.find(
-      { 'amoenusSync.status': { $in: ['pending', 'failed'] } },
+      {
+        'amoenus.sync.status': { $ne: 'sent' },
+        $or: AMOENUS_ORDER_ORIGINS.map((origin) => ({
+          'amoenus.origin': origin,
+          status: { $in: [...AMOENUS_SYNCED_STATUSES[origin]] },
+        })),
+      },
       { _id: 1 },
     )
       .sort({ updatedAt: 1 })
@@ -191,21 +212,31 @@ export class OrderRepository {
     return records.map((record) => record._id.toString())
   }
 
-  async setDeliveryNote(id: string, deliveryNote: DeliveryNoteRef): Promise<void> {
-    await OrderModel.updateOne(
-      { _id: id },
+  /**
+   * Reserva hasta `until` el envío a Amoenus del pedido, si no está ya enviado ni reservado por
+   * otro. Devuelve el pedido reservado o null.
+   */
+  async claimAmoenusSync(id: string, until: Date): Promise<Order | null> {
+    if (!isValidObjectId(id)) return null
+    const record = await OrderModel.findOneAndUpdate(
       {
-        $set: {
-          deliveryNote: { id: new Types.ObjectId(deliveryNote.id), number: deliveryNote.number },
-        },
+        _id: id,
+        'amoenus.origin': { $exists: true },
+        'amoenus.sync.status': { $ne: 'sent' },
+        // Libre: null, o una reserva caducada de un envío que no terminó.
+        'amoenus.sendingUntil': { $not: { $gt: new Date() } },
       },
-    )
+      { $set: { 'amoenus.sendingUntil': until } },
+      { returnDocument: 'after' },
+    ).lean<OrderRecord>()
+    return record ? toOrder(record) : null
   }
 
-  async setAmoenusSync(id: string, sync: AmoenusSync): Promise<void> {
+  /** Guarda el resultado del envío y libera la reserva, si sigue siendo la de quien lo envió. */
+  async saveAmoenusSync(id: string, sync: AmoenusSync, claimedUntil: Date): Promise<void> {
     await OrderModel.updateOne(
-      { _id: id },
-      { $set: { amoenusSync: toAmoenusSyncRecord(sync) } },
+      { _id: id, 'amoenus.sendingUntil': claimedUntil },
+      { $set: { 'amoenus.sync': toAmoenusSyncRecord(sync), 'amoenus.sendingUntil': null } },
       { runValidators: true },
     )
   }
@@ -221,8 +252,7 @@ export class OrderRepository {
       storeName: data.storeName,
       status: data.firstEntry.status,
       notes: data.notes,
-      source: data.source,
-      amoenusLocalId: data.amoenusLocalId,
+      amoenus: data.amoenus ? toAmoenusLinkRecord(data.amoenus) : null,
       lines: data.lines.map(toLineRecord),
       statusHistory: [toEntryRecord(data.firstEntry)],
       createdBy: {
@@ -245,6 +275,14 @@ export class OrderRepository {
         $set: {
           status: change.status,
           ...(change.lines ? { lines: change.lines.map(toLineRecord) } : {}),
+          ...(change.deliveryNote
+            ? {
+                deliveryNote: {
+                  id: new Types.ObjectId(change.deliveryNote.id),
+                  number: change.deliveryNote.number,
+                },
+              }
+            : {}),
         },
         $push: { statusHistory: toEntryRecord(change.entry) },
       },

@@ -13,7 +13,6 @@ import {
   getOrderRoute,
   listOrdersRoute,
   rejectOrderRoute,
-  resendToAmoenusRoute,
 } from './order.schemas'
 import { OrderService } from './order.service'
 
@@ -46,9 +45,5 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
     controller.reject,
   )
   app.post('/:id/cancel', { schema: cancelOrderRoute, preHandler: onlyStore }, controller.cancel)
-  app.post(
-    '/:id/amoenus-sync',
-    { schema: resendToAmoenusRoute, preHandler: onlyKitchenAdmin },
-    controller.resendToAmoenus,
-  )
+  // El reenvío a Amoenus (`/:id/amoenus-sync`) lo registra el módulo de la integración.
 }

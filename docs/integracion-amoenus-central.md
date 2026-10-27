@@ -23,8 +23,9 @@ Amoenus (warehouses, OrderSupplier.createOrder)
   (`suppliers[].code`) el código de 5 dígitos de Cocina Central; `quantity` son formatos (bandejas,
   cajas…), su unidad de servicio. El precio y el formato salen del catálogo de Cocina Central.
 - **Tienda**: de momento `storeName` = nombre del local en Amoenus. El pedido guarda además
-  `source: { system: 'amoenus', externalOrderId, clientId, localId }`, que el módulo `stores` podrá usar.
-- **Idempotencia**: índice único por `source.externalOrderId`; reenviar el mismo pedido devuelve el existente.
+  `amoenus: { origin: 'amoenus_order', externalOrderId, clientId, localId, sync }`, que el módulo
+  `stores` podrá usar. La tienda no puede cancelarlo: en Amoenus no se puede cancelar un pedido enviado.
+- **Idempotencia**: índice único por `amoenus.externalOrderId`; reenviar el mismo pedido devuelve el existente.
 - **Autor**: usuario técnico `amoenus` (desactivado, no puede iniciar sesión); en el pedido figura
   `"<usuario de Amoenus> (Amoenus)"`. La ficha muestra la etiqueta «Desde Amoenus».
 - **En Amoenus**: la colección `cocinacentralconfigs` (`clientId`, `supplierId`, `baseUrl`, `apiKey`)
@@ -43,7 +44,7 @@ Amoenus, se le envía en el momento; al **rechazarlo**, se envía el rechazo con
 como el albarán de Conway en Amoenus, pero sin cron: lo empuja Cocina Central.
 
 ```
-Cocina Central (OrderService.approve / reject → AmoenusSyncService)
+Cocina Central (OrderService.approve / reject → OrderResolvedListener = AmoenusSyncService)
   └─ POST {AMOENUS_API_URL}/warehouses/cocina-central/delivery-notes   X-Api-Key: <AMOENUS_API_KEY>
        { externalOrderId, orderNumber, deliveryNote: { number, issuedAt,
          lines: [{ code, name, requestedQty, deliveredQty, unitPrice }] } }
@@ -56,10 +57,18 @@ Cocina Central (OrderService.approve / reject → AmoenusSyncService)
   `http://localhost:4547/api`) y la misma `AMOENUS_API_KEY`. En Amoenus, la ruta no lleva sesión: la
   clave identifica la fila de `cocinacentralconfigs` (cliente + proveedor) y solo acepta pedidos de ese
   cliente a ese proveedor marcados `cocinaCentral`.
-- **Si Amoenus no responde**, el pedido queda aprobado o rechazado igualmente y el envío queda en
-  `order.amoenusSync` (`pending` → `sent` / `failed`, con `attempts` y `lastError`). `server.ts`
-  reintenta los no enviados cada 5 minutos y el obrador puede pulsar «Reenviar a Amoenus» en la ficha
-  (`POST /api/v1/orders/:id/amoenus-sync`). Amoenus es idempotente: un reenvío sustituye el albarán.
+- **Qué se envía** lo decide `amoenusEventFor(order)` (`packages/shared`) según el origen y el estado del
+  pedido; el módulo de pedidos no sabe nada de Amoenus, solo avisa de que el pedido se ha resuelto.
+- **Si Amoenus no responde**, el pedido queda aprobado o rechazado igualmente y el resultado del último
+  intento queda en `order.amoenus.sync` (`sent` / `failed`, con `attempts` y `lastError`; null = aún sin
+  intentar). Lo pendiente se deduce del estado del pedido, así que tampoco se pierde si el proceso cae
+  a mitad de una aprobación: el albarán se guarda en el pedido en la misma escritura que la aprobación y
+  el documento se regenera si falta. `server.ts` reintenta los no enviados cada 5 minutos (una ronda no
+  empieza hasta que acaba la anterior) y el obrador puede pulsar «Reenviar a Amoenus» en la ficha
+  (`POST /api/v1/orders/:id/amoenus-sync`).
+- **Sin envíos duplicados**: antes de enviar, el pedido se reserva en la base de datos
+  (`amoenus.sendingUntil`, 60 s), así que el reintento, un reenvío a mano u otra instancia de la API no
+  lo envían a la vez. Amoenus es idempotente: un reenvío posterior sustituye el albarán.
 - **En Amoenus** el albarán se guarda como `GlobalDeliveryNote` (pedido = `serviceUnit`, servido =
   `quantityServiceUnit`, precio de Cocina Central) enlazado al pedido por `globalDeliveryNoteId`, y el
   pedido se autocorrige con lo servido (las líneas a 0 se quitan). En Gestión de pedidos sale el botón
@@ -70,7 +79,7 @@ Cocina Central (OrderService.approve / reject → AmoenusSyncService)
 
 Una tienda puede estar **vinculada a un local de Amoenus** (`users.amoenusLocalId`; en desarrollo, los
 usuarios `granvia`, `villaverde` y `quintana` del seed, de La Empanadera). El vínculo se copia al pedido al
-crearlo (`order.amoenusLocalId`). Cuando el obrador **aprueba** un pedido de una tienda vinculada, se envía a
+crearlo (`order.amoenus = { origin: 'linked_store', localId }`). Cuando el obrador **aprueba** un pedido de una tienda vinculada, se envía a
 Amoenus el pedido con su albarán, y Amoenus lo da de alta como pedido a proveedor (Cocina Central) de ese
 local. Los pedidos de tiendas sin vincular, y los rechazados o cancelados, no se envían.
 

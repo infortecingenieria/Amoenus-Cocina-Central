@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { paginatedSchema, paginationQuerySchema } from '../common/pagination'
 import { deliveryNoteRefSchema } from '../delivery-notes/delivery-note.schemas'
+import { amoenusOrderLinkSchema } from '../integrations/amoenus-link.schemas'
 import { packageFormatSchema } from '../sale-articles/package-format'
 import { orderStatusSchema, type OrderStatus } from './order-status'
 
@@ -102,39 +103,6 @@ export const orderStatusEntrySchema = z.object({
 })
 export type OrderStatusEntry = z.infer<typeof orderStatusEntrySchema>
 
-/** Sistemas externos que pueden enviar pedidos al obrador. */
-export const ORDER_SOURCE_SYSTEMS = ['amoenus'] as const
-
-/** Origen de un pedido que no ha hecho la tienda desde esta aplicación, sino otro sistema. */
-export const orderSourceSchema = z.object({
-  system: z.enum(ORDER_SOURCE_SYSTEMS),
-  /** Identificador del pedido en el sistema de origen (en Amoenus, el `_id` del pedido a proveedor). */
-  externalOrderId: z.string(),
-  clientId: z.string(),
-  /** Local del sistema de origen que hace el pedido. */
-  localId: z.string(),
-})
-export type OrderSource = z.infer<typeof orderSourceSchema>
-
-/**
- * Qué se comunica a Amoenus. De un pedido que viene de allí, el albarán al aprobar o el rechazo; de
- * un pedido de una tienda vinculada a un local de Amoenus, el pedido con su albarán al aprobar.
- */
-export const AMOENUS_SYNC_EVENTS = ['delivery_note', 'rejection', 'store_order'] as const
-export const AMOENUS_SYNC_STATUSES = ['pending', 'sent', 'failed'] as const
-export type AmoenusSyncStatus = (typeof AMOENUS_SYNC_STATUSES)[number]
-
-/** Estado del envío a Amoenus. Si falla, el obrador ya ha resuelto el pedido y se reintenta. */
-export const amoenusSyncSchema = z.object({
-  event: z.enum(AMOENUS_SYNC_EVENTS),
-  status: z.enum(AMOENUS_SYNC_STATUSES),
-  attempts: z.number().int(),
-  lastError: z.string().nullable(),
-  lastAttemptAt: isoDateTimeSchema.nullable(),
-  sentAt: isoDateTimeSchema.nullable(),
-})
-export type AmoenusSync = z.infer<typeof amoenusSyncSchema>
-
 const orderBaseSchema = z.object({
   id: objectIdSchema,
   /** Número correlativo por año: «PED-2026-0001». */
@@ -143,17 +111,13 @@ const orderBaseSchema = z.object({
   storeName: z.string(),
   status: orderStatusSchema,
   notes: z.string().nullable(),
-  /** null = lo ha hecho la tienda desde esta aplicación. */
-  source: orderSourceSchema.nullable(),
   /**
-   * Local de Amoenus de la tienda que hizo el pedido, si la tienda está vinculada (copia del usuario
-   * al crear el pedido). Al aprobarlo, el pedido se da de alta en Amoenus con su albarán.
+   * Vínculo con Amoenus: el pedido viene de allí o es de una tienda vinculada a un local (copia del
+   * usuario al crearlo). null = pedido de una tienda sin vincular.
    */
-  amoenusLocalId: z.string().nullable(),
+  amoenus: amoenusOrderLinkSchema.nullable(),
   /** Albarán generado al aprobar; null mientras el pedido no se ha aprobado. */
   deliveryNote: deliveryNoteRefSchema.nullable(),
-  /** Solo en los pedidos que vienen de Amoenus o de una tienda vinculada, una vez resueltos. */
-  amoenusSync: amoenusSyncSchema.nullable(),
   /** Importe con las cantidades confirmadas o, si aún no las hay, las pedidas. */
   total: z.number(),
   createdBy: z.object({ id: objectIdSchema, displayName: z.string() }),

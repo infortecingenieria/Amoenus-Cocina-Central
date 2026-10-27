@@ -33,7 +33,7 @@ export const ordersApi = {
 
   cancel: (id: string) => apiClient.post<Order>(`${BASE_PATH}/${id}/cancel`, undefined),
 
-  /** Reenvía a Amoenus el albarán o el rechazo de un pedido que viene de allí. */
+  /** Reenvía a Amoenus lo que esté pendiente del pedido (albarán, rechazo o pedido de tienda). */
   resendToAmoenus: (id: string) =>
     apiClient.post<Order>(`${BASE_PATH}/${id}/amoenus-sync`, undefined),
 }

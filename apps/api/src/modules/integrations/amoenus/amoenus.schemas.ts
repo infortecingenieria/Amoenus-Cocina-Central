@@ -1,4 +1,9 @@
-import { amoenusOrderSchema, apiErrorSchema, orderSchema } from '@cocina-central/shared'
+import {
+  amoenusOrderSchema,
+  apiErrorSchema,
+  idParamsSchema,
+  orderSchema,
+} from '@cocina-central/shared'
 
 /** Contrato HTTP de las rutas que usa Amoenus Central. */
 const tags = ['integrations']
@@ -14,4 +19,11 @@ export const receiveAmoenusOrderRoute = {
     400: apiErrorSchema,
     401: apiErrorSchema,
   },
+}
+
+export const resendToAmoenusRoute = {
+  tags: ['orders'],
+  summary: 'Reenvía a Amoenus lo que esté pendiente del pedido (albarán, rechazo o pedido de tienda)',
+  params: idParamsSchema,
+  response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
 }

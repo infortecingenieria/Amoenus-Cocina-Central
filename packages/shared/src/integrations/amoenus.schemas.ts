@@ -75,7 +75,7 @@ export type AmoenusDeliveryNote = z.infer<typeof amoenusDeliveryNoteSchema>
 
 /** Albarán que se envía a Amoenus al aprobar un pedido suyo: el pedido se corrige con lo servido. */
 export const amoenusDeliveryNotePayloadSchema = z.object({
-  /** `_id` del pedido a proveedor en Amoenus (`source.externalOrderId`). */
+  /** `_id` del pedido a proveedor en Amoenus (`amoenus.externalOrderId` del pedido). */
   externalOrderId: z.string(),
   /** Número del pedido en Cocina Central («PED-2026-0001»), que Amoenus guarda en `orderCode`. */
   orderNumber: z.string(),

@@ -11,8 +11,8 @@ import { DeliveryNoteService } from '../../delivery-notes/delivery-note.service'
 import { OrderRepository } from '../../orders/order.repository'
 import { OrderService } from '../../orders/order.service'
 import { SaleArticleRepository } from '../../sale-articles/sale-article.repository'
-import { AmoenusIntegrationController } from './amoenus.controller'
-import { receiveAmoenusOrderRoute } from './amoenus.schemas'
+import { AmoenusIntegrationController, AmoenusSyncController } from './amoenus.controller'
+import { receiveAmoenusOrderRoute, resendToAmoenusRoute } from './amoenus.schemas'
 import { AmoenusIntegrationService } from './amoenus.service'
 
 export interface AmoenusRoutesOptions {
@@ -61,4 +61,15 @@ export const amoenusIntegrationRoutes: FastifyPluginAsyncZod<AmoenusRoutesOption
   })
 
   app.post('/orders', { schema: receiveAmoenusOrderRoute }, controller.receiveOrder)
+}
+
+/** Rutas de la aplicación sobre los envíos a Amoenus. Van con sesión, bajo `/orders`. */
+export const amoenusSyncRoutes: FastifyPluginAsyncZod = async (app) => {
+  const controller = new AmoenusSyncController(app.amoenusSync)
+
+  app.post(
+    '/:id/amoenus-sync',
+    { schema: resendToAmoenusRoute, preHandler: app.requireRole('kitchen_admin') },
+    controller.resend,
+  )
 }

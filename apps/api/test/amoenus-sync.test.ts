@@ -9,6 +9,8 @@ import type { InjectOptions } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { UserModel } from '../src/modules/auth/user.model'
+import { DeliveryNoteModel } from '../src/modules/delivery-notes/delivery-note.model'
+import { OrderModel } from '../src/modules/orders/order.model'
 import {
   clearDatabase,
   createTestApp,
@@ -125,7 +127,7 @@ describe('Albaranes y envíos a Amoenus', () => {
       const approved = (await approve(created.json<Order>().id)).json<Order>()
 
       expect(approved.deliveryNote).not.toBeNull()
-      expect(approved.amoenusSync).toBeNull()
+      expect(approved.amoenus).toBeNull()
       expect(amoenus.deliveryNotes).toHaveLength(0)
     })
 
@@ -150,12 +152,7 @@ describe('Albaranes y envíos a Amoenus', () => {
         })
       ).json<Order>()
 
-      expect(approved.amoenusSync).toMatchObject({
-        event: 'delivery_note',
-        status: 'sent',
-        attempts: 1,
-        lastError: null,
-      })
+      expect(approved.amoenus?.sync).toMatchObject({ status: 'sent', attempts: 1, lastError: null })
       expect(amoenus.deliveryNotes).toEqual([
         {
           externalOrderId: EXTERNAL_ORDER_ID,
@@ -194,7 +191,7 @@ describe('Albaranes y envíos a Amoenus', () => {
         })
       ).json<Order>()
 
-      expect(rejected.amoenusSync).toMatchObject({ event: 'rejection', status: 'sent' })
+      expect(rejected.amoenus?.sync).toMatchObject({ status: 'sent' })
       expect(amoenus.rejections).toEqual([
         {
           externalOrderId: EXTERNAL_ORDER_ID,
@@ -214,17 +211,56 @@ describe('Albaranes y envíos a Amoenus', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json<Order>()).toMatchObject({
         status: 'approved',
-        amoenusSync: { status: 'failed', attempts: 1, lastError: 'Amoenus no está disponible' },
+        amoenus: {
+          sync: { status: 'failed', attempts: 1, lastError: 'Amoenus no está disponible' },
+        },
       })
 
       amoenus.failing = false
       expect(await ctx.app.amoenusSync.retryUnsent()).toBe(1)
 
       const stored = (await asAdmin({ url: `/api/v1/orders/${order.id}` })).json<Order>()
-      expect(stored.amoenusSync).toMatchObject({ status: 'sent', attempts: 2, lastError: null })
+      expect(stored.amoenus?.sync).toMatchObject({ status: 'sent', attempts: 2, lastError: null })
       expect(amoenus.deliveryNotes).toHaveLength(1)
       // Lo ya enviado no se vuelve a reintentar.
       expect(await ctx.app.amoenusSync.retryUnsent()).toBe(0)
+    })
+
+    it('si la aprobación se interrumpe tras guardarla, el reintento genera el albarán y lo envía', async () => {
+      const order = await receiveFromAmoenus()
+      const approved = (await approve(order.id)).json<Order>()
+      // Estado en que queda si el proceso cae justo después de guardar la aprobación: el pedido ya
+      // tiene el número de albarán, pero ni el documento ni el envío existen.
+      await DeliveryNoteModel.deleteMany({})
+      await OrderModel.updateOne({ _id: order.id }, { $set: { 'amoenus.sync': null } })
+      amoenus.reset()
+
+      expect(await ctx.app.amoenusSync.retryUnsent()).toBe(1)
+      expect(amoenus.deliveryNotes).toEqual([
+        expect.objectContaining({
+          deliveryNote: expect.objectContaining({ number: approved.deliveryNote?.number }),
+        }),
+      ])
+      expect(await DeliveryNoteModel.countDocuments({ number: approved.deliveryNote?.number })).toBe(
+        1,
+      )
+    })
+
+    it('no envía dos veces el mismo pedido aunque coincidan varios envíos', async () => {
+      const order = await receiveFromAmoenus()
+      amoenus.failing = true
+      await approve(order.id)
+      amoenus.failing = false
+
+      await Promise.all([
+        ctx.app.amoenusSync.retryUnsent(),
+        ctx.app.amoenusSync.retryUnsent(),
+        asAdmin({ method: 'POST', url: `/api/v1/orders/${order.id}/amoenus-sync` }),
+      ])
+
+      expect(amoenus.deliveryNotes).toHaveLength(1)
+      const stored = (await asAdmin({ url: `/api/v1/orders/${order.id}` })).json<Order>()
+      expect(stored.amoenus?.sync).toMatchObject({ status: 'sent', attempts: 2 })
     })
 
     it('el obrador puede reenviarlo a mano', async () => {
@@ -238,7 +274,7 @@ describe('Albaranes y envíos a Amoenus', () => {
         url: `/api/v1/orders/${order.id}/amoenus-sync`,
       })
       expect(response.statusCode).toBe(200)
-      expect(response.json<Order>().amoenusSync?.status).toBe('sent')
+      expect(response.json<Order>().amoenus?.sync?.status).toBe('sent')
     })
 
     it('no hay nada que reenviar en un pedido sin resolver', async () => {
@@ -296,7 +332,11 @@ describe('Albaranes y envíos a Amoenus', () => {
 
     it('el pedido guarda el local de Amoenus de la tienda', async () => {
       await linkStoreToAmoenus()
-      expect((await storeOrder()).amoenusLocalId).toBe(LOCAL_ID)
+      expect((await storeOrder()).amoenus).toEqual({
+        origin: 'linked_store',
+        localId: LOCAL_ID,
+        sync: null,
+      })
     })
 
     it('al aprobarlo envía a Amoenus el pedido con su albarán', async () => {
@@ -309,7 +349,7 @@ describe('Albaranes y envíos a Amoenus', () => {
         })
       ).json<Order>()
 
-      expect(approved.amoenusSync).toMatchObject({ event: 'store_order', status: 'sent' })
+      expect(approved.amoenus?.sync).toMatchObject({ status: 'sent' })
       expect(amoenus.storeOrders).toEqual([
         {
           orderId: order.id,
@@ -346,9 +386,9 @@ describe('Albaranes y envíos a Amoenus', () => {
 
     it('si la tienda no está vinculada no se envía nada', async () => {
       const order = await storeOrder()
-      expect(order.amoenusLocalId).toBeNull()
+      expect(order.amoenus).toBeNull()
       const approved = (await approve(order.id)).json<Order>()
-      expect(approved.amoenusSync).toBeNull()
+      expect(approved.amoenus).toBeNull()
       expect(amoenus.storeOrders).toHaveLength(0)
     })
 
@@ -362,16 +402,23 @@ describe('Albaranes y envíos a Amoenus', () => {
           payload: { reason: 'Fuera de plazo' },
         })
       ).json<Order>()
-      expect(rejected.amoenusSync).toBeNull()
+      expect(rejected.amoenus?.sync).toBeNull()
       expect(amoenus.rejections).toHaveLength(0)
+      expect(await ctx.app.amoenusSync.retryUnsent()).toBe(0)
+    })
+
+    it('la tienda puede cancelarlo: en Amoenus aún no existe', async () => {
+      await linkStoreToAmoenus()
+      const order = await storeOrder()
+      const response = await asStore({ method: 'POST', url: `/api/v1/orders/${order.id}/cancel` })
+      expect(response.json<Order>().status).toBe('cancelled')
     })
 
     it('si Amoenus no responde, se reintenta como el resto de envíos', async () => {
       await linkStoreToAmoenus()
       const order = await storeOrder()
       amoenus.failing = true
-      expect((await approve(order.id)).json<Order>().amoenusSync).toMatchObject({
-        event: 'store_order',
+      expect((await approve(order.id)).json<Order>().amoenus?.sync).toMatchObject({
         status: 'failed',
       })
 

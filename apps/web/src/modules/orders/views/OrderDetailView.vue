@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import {
+  amoenusEventFor,
   calculateOrderTotal,
   formatPackage,
   isEditableByStore,
+  isFromAmoenus,
   orderLineTotal,
   type AmoenusSync,
+  type AmoenusSyncEvent,
   type Order,
 } from '@cocina-central/shared'
 import { ArrowLeftIcon, CheckIcon, CircleXIcon, RefreshCwIcon, XIcon } from '@lucide/vue'
@@ -60,7 +63,7 @@ const canCancel = computed(
   () =>
     !session.isKitchenAdmin &&
     !!order.value &&
-    !order.value.source &&
+    !isFromAmoenus(order.value) &&
     isEditableByStore(order.value.status),
 )
 
@@ -130,27 +133,39 @@ async function cancel(current: Order) {
 }
 
 // Envío a Amoenus (pedidos que vienen de allí o de una tienda vinculada). Solo lo ve el obrador.
-const AMOENUS_SYNC_EVENT_LABELS: Record<AmoenusSync['event'], string> = {
+const AMOENUS_SYNC_EVENT_LABELS: Record<AmoenusSyncEvent, string> = {
   delivery_note: 'Albarán',
   rejection: 'Rechazo',
   store_order: 'Pedido y albarán',
 }
-const AMOENUS_SYNC_STATUS_LABELS: Record<AmoenusSync['status'], string> = {
+const AMOENUS_SYNC_STATUS_LABELS: Record<AmoenusSync['status'] | 'pending', string> = {
   pending: 'pendiente de enviar',
   sent: 'enviado',
   failed: 'no se ha podido enviar',
 }
-const amoenusSync = computed(() => (session.isKitchenAdmin ? order.value?.amoenusSync : null))
+/** Qué hay que comunicar a Amoenus y cómo va; null si nada. Sin intentos aún = pendiente. */
+const amoenusSync = computed(() => {
+  const current = order.value
+  const event = current && session.isKitchenAdmin ? amoenusEventFor(current) : null
+  if (!current || !event) return null
+  const sync = current.amoenus?.sync
+  return {
+    event,
+    status: sync?.status ?? ('pending' as const),
+    sentAt: sync?.sentAt ?? null,
+    lastError: sync?.lastError ?? null,
+  }
+})
 
 const resendMutation = useResendToAmoenus()
 
 async function resendToAmoenus(current: Order) {
   try {
-    const updated = await resendMutation.mutateAsync(current.id)
-    if (updated.amoenusSync?.status === 'sent') {
+    const sync = (await resendMutation.mutateAsync(current.id)).amoenus?.sync
+    if (sync?.status === 'sent') {
       toast.success(`Pedido ${current.number} enviado a Amoenus`)
     } else {
-      toast.error(`No se ha podido enviar a Amoenus: ${updated.amoenusSync?.lastError ?? ''}`)
+      toast.error(`No se ha podido enviar a Amoenus: ${sync?.lastError ?? ''}`)
     }
   } catch (err) {
     showOrderError(err)
@@ -183,7 +198,7 @@ async function resendToAmoenus(current: Order) {
           <div class="flex flex-wrap items-center gap-3">
             <h1 class="font-mono text-2xl font-bold">{{ order.number }}</h1>
             <OrderStatusBadge :status="order.status" />
-            <Badge v-if="order.source?.system === 'amoenus'" variant="outline">Desde Amoenus</Badge>
+            <Badge v-if="isFromAmoenus(order)" variant="outline">Desde Amoenus</Badge>
           </div>
           <p class="text-muted-foreground">
             {{ order.storeName }} · enviado por {{ order.createdBy.displayName }} el

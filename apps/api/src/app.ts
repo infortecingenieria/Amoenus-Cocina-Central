@@ -11,6 +11,7 @@ import {
 import type { AppConfig } from './config/env'
 import { authRoutes } from './modules/auth/auth.routes'
 import { DeliveryNoteRepository } from './modules/delivery-notes/delivery-note.repository'
+import { DeliveryNoteService } from './modules/delivery-notes/delivery-note.service'
 import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { AmoenusSyncService } from './modules/integrations/amoenus/amoenus-sync.service'
@@ -18,7 +19,10 @@ import {
   HttpAmoenusClient,
   type AmoenusClient,
 } from './modules/integrations/amoenus/amoenus.client'
-import { amoenusIntegrationRoutes } from './modules/integrations/amoenus/amoenus.routes'
+import {
+  amoenusIntegrationRoutes,
+  amoenusSyncRoutes,
+} from './modules/integrations/amoenus/amoenus.routes'
 import { OrderRepository } from './modules/orders/order.repository'
 import { orderRoutes } from './modules/orders/order.routes'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
@@ -43,7 +47,7 @@ export type AppOptions = Pick<
 
 declare module 'fastify' {
   interface FastifyInstance {
-    /** Envíos a Amoenus (albaranes y rechazos); `server.ts` reintenta los pendientes. */
+    /** Envíos a Amoenus de los pedidos resueltos; `server.ts` reintenta los pendientes. */
     amoenusSync: AmoenusSyncService
   }
 }
@@ -85,6 +89,7 @@ const apiV1Routes: FastifyPluginAsyncZod<Pick<AppOptions, 'amoenusApiKey'>> = as
     await protectedApp.register(saleArticleRoutes, { prefix: '/sale-articles' })
     await protectedApp.register(familyRoutes, { prefix: '/families' })
     await protectedApp.register(orderRoutes, { prefix: '/orders' })
+    await protectedApp.register(amoenusSyncRoutes, { prefix: '/orders' })
   })
 }
 
@@ -111,9 +116,10 @@ export async function buildApp(options: AppOptions) {
     'amoenusSync',
     new AmoenusSyncService(
       new OrderRepository(),
-      new DeliveryNoteRepository(),
+      new DeliveryNoteService(new DeliveryNoteRepository()),
       options.amoenusClient ??
         new HttpAmoenusClient({ baseUrl: options.amoenusApiUrl, apiKey: options.amoenusApiKey }),
+      app.log,
     ),
   )
 

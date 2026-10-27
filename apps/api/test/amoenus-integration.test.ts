@@ -117,11 +117,12 @@ describe('API /integrations/amoenus', () => {
         status: 'pending',
         notes: 'Entregar antes de las 9',
         total: 6.05, // 3 × 1,45 + 2 × 0,85
-        source: {
-          system: 'amoenus',
+        amoenus: {
+          origin: 'amoenus_order',
           externalOrderId: '6ad900000000000000000001',
           clientId: '6ad0e888633d003bc06d96e2',
           localId: '6ad2118ea308181751f12e16',
+          sync: null,
         },
         createdBy: { displayName: 'amoenuslaempanadera (Amoenus)' },
       })
@@ -144,7 +145,7 @@ describe('API /integrations/amoenus', () => {
 
       // El obrador la ve en sus solicitudes como cualquier otra.
       const stored = await asAdmin({ url: `/api/v1/orders/${order.id}` })
-      expect(stored.json<Order>().source?.system).toBe('amoenus')
+      expect(stored.json<Order>().amoenus?.origin).toBe('amoenus_order')
     })
 
     it('comparte la numeración con los pedidos hechos desde la aplicación', async () => {

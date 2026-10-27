@@ -2,24 +2,33 @@ import { buildApp } from './app'
 import { loadConfig } from './config/env'
 import { connectDatabase, disconnectDatabase } from './database/mongoose'
 
-/** Cada cuánto se reintentan los albaranes y rechazos que no han llegado a Amoenus. */
+/** Cada cuánto se reintentan los envíos que no han llegado a Amoenus. */
 const AMOENUS_RETRY_INTERVAL_MS = 5 * 60 * 1000
 
 const config = loadConfig()
 const app = await buildApp(config)
 
-const amoenusRetry = setInterval(() => {
-  app.amoenusSync
-    .retryUnsent()
-    .then((sent) => {
+// Cada ronda programa la siguiente al terminar (no `setInterval`), para que una lenta (Amoenus
+// sin responder) no se solape con la siguiente.
+let closing = false
+let amoenusRetry: NodeJS.Timeout | undefined
+const scheduleAmoenusRetry = () => {
+  amoenusRetry = setTimeout(async () => {
+    try {
+      const sent = await app.amoenusSync.retryUnsent()
       if (sent > 0) app.log.info(`Reenviados a Amoenus: ${sent}`)
-    })
-    .catch((error: unknown) => app.log.error({ err: error }, 'Error reintentando envíos a Amoenus'))
-}, AMOENUS_RETRY_INTERVAL_MS)
-amoenusRetry.unref()
+    } catch (error) {
+      app.log.error({ err: error }, 'Error reintentando envíos a Amoenus')
+    }
+    if (!closing) scheduleAmoenusRetry()
+  }, AMOENUS_RETRY_INTERVAL_MS)
+  amoenusRetry.unref()
+}
+scheduleAmoenusRetry()
 
 app.addHook('onClose', async () => {
-  clearInterval(amoenusRetry)
+  closing = true
+  clearTimeout(amoenusRetry)
   await disconnectDatabase()
 })
 

@@ -1,13 +1,15 @@
 import {
   canTransition,
+  isFromAmoenus,
   ORDER_STATUS_LABELS,
+  type AmoenusOrderLink,
   type ApproveOrderInput,
   type AuthUser,
   type CreateOrderData,
+  type DeliveryNoteRef,
   type ListOrdersQuery,
   type Order,
   type OrderLine,
-  type OrderSource,
   type OrderStatus,
   type OrderSummary,
   type Paginated,
@@ -25,7 +27,6 @@ import {
 } from '../../shared/errors'
 import type { UserRepository } from '../auth/user.repository'
 import type { DeliveryNoteService } from '../delivery-notes/delivery-note.service'
-import type { AmoenusSyncService } from '../integrations/amoenus/amoenus-sync.service'
 import type { SaleArticleRepository } from '../sale-articles/sale-article.repository'
 import type { OrderRepository } from './order.repository'
 
@@ -41,9 +42,15 @@ export interface NewOrderRequest {
   notes: string | null
   lines: CreateOrderData['lines']
   author: OrderAuthor
-  source: OrderSource | null
-  /** Local de Amoenus de la tienda, si está vinculada. */
-  amoenusLocalId?: string | null
+  amoenus: AmoenusOrderLink | null
+}
+
+/**
+ * Lo que tiene que pasar cuando el obrador aprueba o rechaza un pedido, fuera de este módulo
+ * (p. ej. comunicarlo a Amoenus). No debe lanzar: el pedido ya está resuelto.
+ */
+export interface OrderResolvedListener {
+  orderResolved(order: Order): Promise<void>
 }
 
 /** Verbo de cada acción para los mensajes de error. */
@@ -59,20 +66,20 @@ export class OrderService {
   private readonly repository: OrderRepository
   private readonly saleArticles: SaleArticleRepository
   private readonly deliveryNotes: DeliveryNoteService
-  private readonly amoenusSync: AmoenusSyncService
+  private readonly resolvedListener: OrderResolvedListener
   private readonly users: UserRepository
 
   constructor(
     repository: OrderRepository,
     saleArticles: SaleArticleRepository,
     deliveryNotes: DeliveryNoteService,
-    amoenusSync: AmoenusSyncService,
+    resolvedListener: OrderResolvedListener,
     users: UserRepository,
   ) {
     this.repository = repository
     this.saleArticles = saleArticles
     this.deliveryNotes = deliveryNotes
-    this.amoenusSync = amoenusSync
+    this.resolvedListener = resolvedListener
     this.users = users
   }
 
@@ -101,12 +108,14 @@ export class OrderService {
 
   async create(data: CreateOrderData, user: AuthUser): Promise<Order> {
     if (!user.storeName) throw new ForbiddenError('Tu usuario no tiene ninguna tienda asignada')
+    const amoenusLocalId = await this.users.findAmoenusLocalId(user.id)
     return this.createFor({
       ...data,
       storeName: user.storeName,
       author: user,
-      source: null,
-      amoenusLocalId: await this.users.findAmoenusLocalId(user.id),
+      amoenus: amoenusLocalId
+        ? { origin: 'linked_store', localId: amoenusLocalId, sync: null }
+        : null,
     })
   }
 
@@ -119,8 +128,7 @@ export class OrderService {
     notes,
     lines,
     author,
-    source,
-    amoenusLocalId = null,
+    amoenus,
   }: NewOrderRequest): Promise<Order> {
     const orderLines = await this.buildLines(lines)
     const year = currentYear()
@@ -130,8 +138,7 @@ export class OrderService {
       number,
       storeName,
       notes: notes || null,
-      source,
-      amoenusLocalId,
+      amoenus,
       lines: orderLines,
       createdBy: { id: author.id, displayName: author.displayName },
       firstEntry: this.historyEntry('pending', author),
@@ -174,41 +181,23 @@ export class OrderService {
       const message = 'Indica el motivo de los cambios'
       throw new ValidationError(message, [{ path: '/reason', message }])
     }
+    // El albarán se emite con la aprobación, en la misma escritura; el documento se genera a
+    // continuación y, si eso se interrumpe, cuando vuelva a hacer falta (`ensureForOrder`).
+    const deliveryNote = await this.deliveryNotes.reserve()
     const approved = modified
-      ? await this.applyTransition(order, 'modified', user, { lines, reason: data.reason })
-      : await this.applyTransition(order, 'approved', user, { lines })
-
-    // Al aprobar se emite el albarán con lo que se sirve y se envía a Amoenus: si el pedido es de
-    // allí, el albarán; si es de una tienda vinculada a un local, el pedido con su albarán.
-    const deliveryNote = await this.deliveryNotes.createForOrder(approved)
-    await this.repository.setDeliveryNote(approved.id, {
-      id: deliveryNote.id,
-      number: deliveryNote.number,
-    })
-    if (approved.source?.system === 'amoenus') {
-      await this.amoenusSync.queue(approved, 'delivery_note')
-    } else if (approved.amoenusLocalId) {
-      await this.amoenusSync.queue(approved, 'store_order')
-    }
-    return this.reload(approved.id)
+      ? await this.applyTransition(order, 'modified', user, {
+          lines,
+          reason: data.reason,
+          deliveryNote,
+        })
+      : await this.applyTransition(order, 'approved', user, { lines, deliveryNote })
+    await this.deliveryNotes.ensureForOrder(approved)
+    return this.resolved(approved)
   }
 
-  /** Solo se avisa a Amoenus si el pedido es de allí: el de una tienda nunca llegó a existir allí. */
   async reject(id: string, { reason }: RejectOrderInput, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
-    const rejected = await this.applyTransition(order, 'rejected', user, { reason })
-    if (rejected.source?.system === 'amoenus') await this.amoenusSync.queue(rejected, 'rejection')
-    return this.reload(rejected.id)
-  }
-
-  /** Reenvía a Amoenus el albarán o el rechazo de un pedido suyo (p. ej. si Amoenus no respondía). */
-  async resendToAmoenus(id: string, user: AuthUser): Promise<Order> {
-    const order = await this.getById(id, user)
-    if (!order.amoenusSync) {
-      throw new InvalidStateError(`El pedido ${order.number} no tiene nada que enviar a Amoenus`)
-    }
-    await this.amoenusSync.send(order.id)
-    return this.reload(order.id)
+    return this.resolved(await this.applyTransition(order, 'rejected', user, { reason }))
   }
 
   /**
@@ -217,7 +206,7 @@ export class OrderService {
    */
   async cancel(id: string, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
-    if (order.source) {
+    if (isFromAmoenus(order)) {
       throw new InvalidStateError(
         `El pedido ${order.number} se hizo desde Amoenus y no se puede cancelar aquí`,
       )
@@ -225,11 +214,12 @@ export class OrderService {
     return this.applyTransition(order, 'cancelled', user)
   }
 
-  /** El pedido tal y como ha quedado tras guardar el albarán o el envío a Amoenus. */
-  private async reload(id: string): Promise<Order> {
-    const order = await this.repository.findById(id)
-    if (!order) throw new NotFoundError('Pedido no encontrado')
-    return order
+  /** Avisa de la resolución y devuelve el pedido como haya quedado (p. ej. con el envío a Amoenus). */
+  private async resolved(order: Order): Promise<Order> {
+    await this.resolvedListener.orderResolved(order)
+    const reloaded = await this.repository.findById(order.id)
+    if (!reloaded) throw new NotFoundError('Pedido no encontrado')
+    return reloaded
   }
 
   /** `undefined` = sin restricción (obrador). */
@@ -283,12 +273,17 @@ export class OrderService {
     order: Order,
     to: OrderStatus,
     user: AuthUser,
-    { lines, reason }: { lines?: OrderLine[]; reason?: string } = {},
+    {
+      lines,
+      reason,
+      deliveryNote,
+    }: { lines?: OrderLine[]; reason?: string; deliveryNote?: DeliveryNoteRef } = {},
   ): Promise<Order> {
     this.ensureCanTransition(order, to)
     const updated = await this.repository.transition(order.id, order.status, {
       status: to,
       lines,
+      deliveryNote,
       entry: this.historyEntry(to, user, reason),
     })
     if (!updated) {
