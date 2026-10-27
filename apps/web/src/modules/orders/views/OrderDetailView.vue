@@ -51,10 +51,17 @@ const session = useSessionStore()
 const orderId = computed(() => String(route.params.id))
 const { data: order, isPending, isError, error, refetch } = useOrder(orderId)
 
-/** El obrador valida los pedidos pendientes; la tienda puede cancelarlos mientras tanto. */
+/**
+ * El obrador valida los pedidos pendientes; la tienda puede cancelarlos mientras tanto, salvo los
+ * que llegan de Amoenus (allí no se pueden cancelar).
+ */
 const canValidate = computed(() => session.isKitchenAdmin && order.value?.status === 'pending')
 const canCancel = computed(
-  () => !session.isKitchenAdmin && !!order.value && isEditableByStore(order.value.status),
+  () =>
+    !session.isKitchenAdmin &&
+    !!order.value &&
+    !order.value.source &&
+    isEditableByStore(order.value.status),
 )
 
 // Cantidades a servir, por artículo. Empiezan con lo pedido.

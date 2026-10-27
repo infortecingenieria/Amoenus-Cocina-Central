@@ -211,9 +211,17 @@ export class OrderService {
     return this.reload(order.id)
   }
 
-  /** Solo la tienda que lo hizo y solo mientras el obrador no lo ha tramitado. */
+  /**
+   * Solo la tienda que lo hizo y solo mientras el obrador no lo ha tramitado. Los que llegan de
+   * Amoenus no: allí no se puede cancelar un pedido enviado y se quedaría esperando el albarán.
+   */
   async cancel(id: string, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
+    if (order.source) {
+      throw new InvalidStateError(
+        `El pedido ${order.number} se hizo desde Amoenus y no se puede cancelar aquí`,
+      )
+    }
     return this.applyTransition(order, 'cancelled', user)
   }
 

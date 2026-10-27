@@ -216,6 +216,17 @@ describe('API /orders', () => {
       expect((await asAdmin({ url: `${baseUrl}/${own.id}` })).statusCode).toBe(200)
     })
 
+    it('una tienda sin tienda asignada no ve ningún pedido', async () => {
+      const order = await createOrder()
+      const token = ctx.app.signSessionToken({ ...otherStoreUser, storeName: null })
+      const asStoreless = (options: InjectOptions) =>
+        ctx.app.inject({ ...options, headers: { authorization: `Bearer ${token}` } })
+
+      const list = (await asStoreless({ url: baseUrl })).json<Paginated<OrderSummary>>()
+      expect(list.total).toBe(0)
+      expect((await asStoreless({ url: `${baseUrl}/${order.id}` })).statusCode).toBe(404)
+    })
+
     it('filtra por estado y busca por número o tienda', async () => {
       const first = await createOrder()
       await createOrder()

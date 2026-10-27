@@ -142,7 +142,8 @@ export class OrderRepository {
   ): Promise<{ items: OrderSummary[]; total: number }> {
     const query: QueryFilter<OrderRecord> = {}
     if (filter.status?.length) query.status = { $in: filter.status }
-    if (filter.storeName) query.storeName = filter.storeName
+    // `''` también filtra: es el ámbito de una tienda sin tienda asignada, que no ve nada.
+    if (filter.storeName !== undefined) query.storeName = filter.storeName
     if (filter.search) {
       const pattern = new RegExp(escapeRegExp(filter.search), 'i')
       query.$or = [{ number: pattern }, { storeName: pattern }]

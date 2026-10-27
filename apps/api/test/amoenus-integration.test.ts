@@ -211,6 +211,27 @@ describe('API /integrations/amoenus', () => {
       expect(response.json<ApiErrorBody>().code).toBe('VALIDATION_ERROR')
     })
 
+    it('la tienda del local ve la solicitud pero no puede cancelarla', async () => {
+      const order = (await send(amoenusOrder())).json<Order>()
+      const token = ctx.app.signSessionToken({
+        id: '64b7f0c2a1b2c3d4e5f60003',
+        username: 'granvia',
+        displayName: 'Gran Vía',
+        role: 'store',
+        storeName: 'La Empanadera Gran Via',
+      })
+      const headers = { authorization: `Bearer ${token}` }
+      const url = `/api/v1/orders/${order.id}`
+
+      expect((await ctx.app.inject({ url, headers })).statusCode).toBe(200)
+      const response = await ctx.app.inject({ method: 'POST', url: `${url}/cancel`, headers })
+      expect(response.statusCode).toBe(409)
+      expect(response.json<ApiErrorBody>().code).toBe('INVALID_STATE')
+
+      const stored = await asAdmin({ url })
+      expect(stored.json<Order>().status).toBe('pending')
+    })
+
     it('el usuario técnico de Amoenus no puede iniciar sesión', async () => {
       await send(amoenusOrder())
       const response = await ctx.app.inject({
