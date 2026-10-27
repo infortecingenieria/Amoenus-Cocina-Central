@@ -28,6 +28,8 @@ const toLine = (line: DeliveryNoteLineRecord): DeliveryNoteLine => ({
   unitPrice: line.unitPrice,
   requestedQty: line.requestedQty,
   deliveredQty: line.deliveredQty,
+  lotNumber: line.lotNumber ?? null,
+  expiryDate: line.expiryDate ?? null,
 })
 
 const toDeliveryNote = (record: DeliveryNoteRecord): DeliveryNote => ({

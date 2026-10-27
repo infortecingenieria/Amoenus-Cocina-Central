@@ -25,7 +25,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { useApproveOrder } from '../composables/useOrders'
 import { showOrderError } from '../order-errors'
 
-type ApprovalLine = Pick<OrderLine, 'saleArticleId' | 'name' | 'requestedQty' | 'confirmedQty'>
+type ApprovalLine = Pick<
+  OrderLine,
+  'saleArticleId' | 'name' | 'requestedQty' | 'confirmedQty' | 'lotNumber' | 'expiryDate'
+>
 
 const props = defineProps<{
   order: Pick<OrderSummary, 'id' | 'number' | 'storeName'>
@@ -58,13 +61,15 @@ async function submit() {
     lines: props.lines?.map((line) => ({
       saleArticleId: line.saleArticleId,
       confirmedQty: line.confirmedQty ?? line.requestedQty,
+      lotNumber: line.lotNumber,
+      expiryDate: line.expiryDate,
     })),
     // Sin cambios no hay motivo; con cambios es obligatorio (la API también lo exige).
     reason: hasChanges.value ? reason.value : undefined,
   })
   if (!parsed.success) {
     errors.value = z.flattenError(parsed.error).fieldErrors.reason
-    if (!errors.value) toast.error('Revisa las cantidades a servir')
+    if (!errors.value) toast.error('Revisa las cantidades, lotes y caducidades a servir')
     return
   }
 

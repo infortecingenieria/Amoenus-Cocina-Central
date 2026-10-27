@@ -66,6 +66,8 @@ export class DeliveryNoteService {
           unitPrice: line.unitPrice,
           requestedQty: line.requestedQty,
           deliveredQty: effectiveQuantity(line),
+          lotNumber: line.lotNumber,
+          expiryDate: line.expiryDate,
         })),
       })
     } catch (error) {

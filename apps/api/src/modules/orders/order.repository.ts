@@ -66,6 +66,8 @@ const toLine = (line: OrderLineRecord): OrderLine => ({
   unitPrice: line.unitPrice,
   requestedQty: line.requestedQty,
   confirmedQty: line.confirmedQty,
+  lotNumber: line.lotNumber ?? null,
+  expiryDate: line.expiryDate ?? null,
 })
 
 const toLineRecord = (line: OrderLine): OrderLineRecord => ({

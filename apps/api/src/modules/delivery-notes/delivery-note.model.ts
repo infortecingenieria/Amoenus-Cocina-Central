@@ -10,6 +10,10 @@ export interface DeliveryNoteLineRecord {
   unitPrice: number
   requestedQty: number
   deliveredQty: number
+  /** Ausentes en los albaranes anteriores a la trazabilidad. */
+  lotNumber?: string | null
+  /** «2026-11-03» */
+  expiryDate?: string | null
 }
 
 export interface DeliveryNoteRecord {
@@ -34,6 +38,8 @@ const deliveryNoteLineSchema = new Schema<DeliveryNoteLineRecord>(
     unitPrice: { type: Number, required: true, min: 0 },
     requestedQty: { type: Number, required: true, min: 1 },
     deliveredQty: { type: Number, required: true, min: 0 },
+    lotNumber: { type: String, default: null },
+    expiryDate: { type: String, default: null },
   },
   { _id: false },
 )

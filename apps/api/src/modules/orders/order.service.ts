@@ -154,9 +154,7 @@ export class OrderService {
     const order = await this.getById(id, user)
     this.ensureCanTransition(order, 'approved')
 
-    const confirmed = new Map(
-      (data.lines ?? []).map((line) => [line.saleArticleId, line.confirmedQty]),
-    )
+    const confirmed = new Map((data.lines ?? []).map((line) => [line.saleArticleId, line]))
     const issues: ValidationIssue[] = []
     data.lines?.forEach((line, index) => {
       if (!order.lines.some((orderLine) => orderLine.saleArticleId === line.saleArticleId)) {
@@ -168,10 +166,18 @@ export class OrderService {
     })
     if (issues.length > 0) throw new ValidationError('Hay líneas que no son del pedido', issues)
 
-    const lines: OrderLine[] = order.lines.map((line) => ({
-      ...line,
-      confirmedQty: confirmed.get(line.saleArticleId) ?? line.requestedQty,
-    }))
+    const lines: OrderLine[] = order.lines.map((line) => {
+      const input = confirmed.get(line.saleArticleId)
+      const confirmedQty = input?.confirmedQty ?? line.requestedQty
+      // Lo que no se sirve no lleva lote ni caducidad.
+      const served = confirmedQty > 0
+      return {
+        ...line,
+        confirmedQty,
+        lotNumber: served ? (input?.lotNumber ?? null) : null,
+        expiryDate: served ? (input?.expiryDate ?? null) : null,
+      }
+    })
     if (lines.every((line) => line.confirmedQty === 0)) {
       throw new ValidationError('Para no servir ningún artículo, rechaza el pedido')
     }
@@ -252,6 +258,8 @@ export class OrderService {
           unitPrice: article.price,
           requestedQty: line.quantity,
           confirmedQty: null,
+          lotNumber: null,
+          expiryDate: null,
         })
       }
     })

@@ -6,6 +6,9 @@ export const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'Identificador 
 /** Fechas en las respuestas de la API: siempre ISO 8601 en UTC. */
 export const isoDateTimeSchema = z.iso.datetime()
 
+/** Fecha de calendario sin hora ni zona («2026-11-03»), como la de un `<input type="date">`. */
+export const isoDateSchema = z.iso.date('Fecha no válida')
+
 /** Parámetro de ruta `/:id`. */
 export const idParamsSchema = z.object({ id: objectIdSchema })
 export type IdParams = z.infer<typeof idParamsSchema>

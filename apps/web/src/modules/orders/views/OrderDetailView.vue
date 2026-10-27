@@ -5,6 +5,7 @@ import {
   formatPackage,
   isEditableByStore,
   isFromAmoenus,
+  MAX_LOT_NUMBER_LENGTH,
   orderLineTotal,
   type AmoenusSync,
   type AmoenusSyncEvent,
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -37,7 +39,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getErrorMessage } from '@/lib/api-client'
-import { formatCurrency, formatDateTime } from '@/lib/format'
+import { formatCalendarDate, formatCurrency, formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 
@@ -69,30 +71,56 @@ const canCancel = computed(
 
 // Cantidades a servir, por artículo. Empiezan con lo pedido.
 const confirmed = ref<Record<string, number>>({})
+// Nº de lote y caducidad por artículo, opcionales, tal y como se escriben ('' = sin indicar).
+type Traceability = { lotNumber: string; expiryDate: string }
+const traceability = ref<Record<string, Traceability>>({})
 watch(
   () => [order.value?.id, order.value?.status] as const,
   () => {
+    const orderLines = order.value?.lines ?? []
     confirmed.value = Object.fromEntries(
-      (order.value?.lines ?? []).map((line) => [
+      orderLines.map((line) => [line.saleArticleId, line.confirmedQty ?? line.requestedQty]),
+    )
+    traceability.value = Object.fromEntries(
+      orderLines.map((line) => [
         line.saleArticleId,
-        line.confirmedQty ?? line.requestedQty,
+        { lotNumber: line.lotNumber ?? '', expiryDate: line.expiryDate ?? '' },
       ]),
     )
   },
   { immediate: true },
 )
 
-/** Líneas con la cantidad que se mostrará: la que se está ajustando o la ya confirmada. */
+function setTraceability(saleArticleId: string, field: keyof Traceability, value: string | number) {
+  const current = traceability.value[saleArticleId] ?? { lotNumber: '', expiryDate: '' }
+  traceability.value[saleArticleId] = { ...current, [field]: String(value) }
+}
+
+/** Líneas con lo que se mostrará: lo que se está ajustando o lo ya confirmado. */
 const lines = computed(() =>
-  (order.value?.lines ?? []).map((line) => ({
-    ...line,
-    confirmedQty: canValidate.value
-      ? (confirmed.value[line.saleArticleId] ?? line.requestedQty)
-      : line.confirmedQty,
-  })),
+  (order.value?.lines ?? []).map((line) => {
+    if (!canValidate.value) return line
+    const confirmedQty = confirmed.value[line.saleArticleId] ?? line.requestedQty
+    const tracked = traceability.value[line.saleArticleId]
+    // Lo que no se sirve no lleva lote ni caducidad (la API tampoco los guarda).
+    const served = confirmedQty > 0
+    return {
+      ...line,
+      confirmedQty,
+      lotNumber: (served && tracked?.lotNumber.trim()) || null,
+      expiryDate: (served && tracked?.expiryDate) || null,
+    }
+  }),
 )
 const showConfirmedColumn = computed(
   () => canValidate.value || lines.value.some((line) => line.confirmedQty !== null),
+)
+const showTraceabilityColumns = computed(
+  () => canValidate.value || lines.value.some((line) => line.lotNumber || line.expiryDate),
+)
+/** Columnas antes del importe, para que «Total» ocupe todas en el pie. */
+const columnsBeforeAmount = computed(
+  () => 5 + (showConfirmedColumn.value ? 1 : 0) + (showTraceabilityColumns.value ? 2 : 0),
 )
 const total = computed(() => calculateOrderTotal(lines.value))
 const hasChanges = computed(() =>
@@ -292,7 +320,8 @@ async function resendToAmoenus(current: Order) {
       </dl>
 
       <p v-if="canValidate" class="text-sm text-muted-foreground">
-        Ajusta en «Servir» las cantidades si no se puede servir todo lo pedido (0 = no se sirve).
+        Ajusta en «Servir» las cantidades si no se puede servir todo lo pedido (0 = no se sirve). El
+        lote y la caducidad son opcionales.
       </p>
 
       <div class="overflow-x-auto rounded-xl border">
@@ -307,6 +336,10 @@ async function resendToAmoenus(current: Order) {
               <TableHead v-if="showConfirmedColumn" :class="cn(!canValidate && 'text-right')">
                 {{ canValidate ? 'Servir' : 'Servido' }}
               </TableHead>
+              <template v-if="showTraceabilityColumns">
+                <TableHead>Nº de lote</TableHead>
+                <TableHead>Caducidad</TableHead>
+              </template>
               <TableHead class="text-right">Importe</TableHead>
             </TableRow>
           </TableHeader>
@@ -345,6 +378,41 @@ async function resendToAmoenus(current: Order) {
                   {{ line.confirmedQty }}
                 </span>
               </TableCell>
+              <template v-if="showTraceabilityColumns">
+                <TableCell>
+                  <Input
+                    v-if="canValidate"
+                    :model-value="traceability[line.saleArticleId]?.lotNumber ?? ''"
+                    @update:model-value="
+                      (value: string | number) =>
+                        setTraceability(line.saleArticleId, 'lotNumber', value)
+                    "
+                    :maxlength="MAX_LOT_NUMBER_LENGTH"
+                    :disabled="line.confirmedQty === 0"
+                    :aria-label="`Nº de lote de ${line.name}`"
+                    placeholder="Opcional"
+                    class="h-8 w-32"
+                  />
+                  <span v-else class="font-mono text-sm">{{ line.lotNumber ?? '—' }}</span>
+                </TableCell>
+                <TableCell>
+                  <Input
+                    v-if="canValidate"
+                    type="date"
+                    :model-value="traceability[line.saleArticleId]?.expiryDate ?? ''"
+                    @update:model-value="
+                      (value: string | number) =>
+                        setTraceability(line.saleArticleId, 'expiryDate', value)
+                    "
+                    :disabled="line.confirmedQty === 0"
+                    :aria-label="`Fecha de caducidad de ${line.name}`"
+                    class="h-8 w-40"
+                  />
+                  <span v-else class="tabular-nums">{{
+                    line.expiryDate ? formatCalendarDate(line.expiryDate) : '—'
+                  }}</span>
+                </TableCell>
+              </template>
               <TableCell class="text-right tabular-nums">{{
                 formatCurrency(orderLineTotal(line))
               }}</TableCell>
@@ -352,7 +420,7 @@ async function resendToAmoenus(current: Order) {
           </TableBody>
           <TableFooter>
             <TableRow>
-              <TableCell :colspan="showConfirmedColumn ? 6 : 5" class="text-right font-semibold">
+              <TableCell :colspan="columnsBeforeAmount" class="text-right font-semibold">
                 Total
               </TableCell>
               <TableCell class="text-right font-semibold tabular-nums">{{

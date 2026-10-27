@@ -18,6 +18,10 @@ export interface OrderLineRecord {
   unitPrice: number
   requestedQty: number
   confirmedQty: number | null
+  /** Ausentes en los pedidos anteriores a la trazabilidad. */
+  lotNumber?: string | null
+  /** «2026-11-03» */
+  expiryDate?: string | null
 }
 
 export interface OrderStatusEntryRecord {
@@ -70,6 +74,8 @@ const orderLineSchema = new Schema<OrderLineRecord>(
     unitPrice: { type: Number, required: true, min: 0 },
     requestedQty: { type: Number, required: true, min: 1 },
     confirmedQty: { type: Number, default: null, min: 0 },
+    lotNumber: { type: String, default: null },
+    expiryDate: { type: String, default: null },
   },
   { _id: false },
 )

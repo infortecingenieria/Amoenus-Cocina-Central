@@ -1,7 +1,7 @@
 import { formatPackage } from '@cocina-central/shared'
 import { describe, expect, it } from 'vitest'
 
-import { formatCurrency, formatDate, formatTime } from '../format'
+import { formatCalendarDate, formatCurrency, formatDate, formatTime } from '../format'
 
 describe('formato', () => {
   it('formatea importes en euros con formato español', () => {
@@ -19,5 +19,9 @@ describe('formato', () => {
     const createdAt = new Date(2026, 9, 14, 9, 5).toISOString()
     expect(formatDate(createdAt)).toMatch(/^14 oct\.? 2026$/)
     expect(formatTime(createdAt)).toBe('09:05 h')
+  })
+
+  it('formatea una fecha de calendario sin cambiar de día', () => {
+    expect(formatCalendarDate('2026-11-03')).toBe('03/11/2026')
   })
 })

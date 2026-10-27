@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
+import { isoDateSchema, isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { paginatedSchema, paginationQuerySchema } from '../common/pagination'
 import { deliveryNoteRefSchema } from '../delivery-notes/delivery-note.schemas'
 import { amoenusOrderLinkSchema } from '../integrations/amoenus-link.schemas'
@@ -55,10 +55,23 @@ export type CreateOrderData = z.output<typeof createOrderSchema>
 
 // --- Validación (obrador) --------------------------------------------------------------------
 
+/** Máximo de caracteres del número de lote. */
+export const MAX_LOT_NUMBER_LENGTH = 50
+
 export const approveOrderLineSchema = z.object({
   saleArticleId: objectIdSchema,
   /** Formatos que servirá el obrador. 0 = no se sirve esa línea. */
   confirmedQty: quantitySchema.min(0, 'La cantidad no puede ser negativa'),
+  /** Nº de lote de lo que se sirve, a mano y opcional. Vacío = sin indicar. */
+  lotNumber: z
+    .string()
+    .trim()
+    .max(MAX_LOT_NUMBER_LENGTH, `Máximo ${MAX_LOT_NUMBER_LENGTH} caracteres`)
+    .nullable()
+    .transform((value) => value || null)
+    .optional(),
+  /** Fecha de caducidad de lo que se sirve, opcional. */
+  expiryDate: isoDateSchema.nullable().optional(),
 })
 
 /**
@@ -90,6 +103,9 @@ export const orderLineSchema = z.object({
   requestedQty: z.number().int(),
   /** Cantidad que sirve el obrador; null mientras no se ha aprobado. */
   confirmedQty: z.number().int().nullable(),
+  /** Trazabilidad que anota el obrador al aprobar; null = sin indicar o no se sirve. */
+  lotNumber: z.string().nullable(),
+  expiryDate: isoDateSchema.nullable(),
 })
 export type OrderLine = z.infer<typeof orderLineSchema>
 

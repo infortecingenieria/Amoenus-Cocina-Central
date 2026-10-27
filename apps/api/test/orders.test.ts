@@ -11,6 +11,7 @@ import type {
 import type { InjectOptions } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { DeliveryNoteModel } from '../src/modules/delivery-notes/delivery-note.model'
 import { clearDatabase, createTestApp, type TestContext } from './helpers/test-app'
 
 const baseUrl = '/api/v1/orders'
@@ -113,6 +114,8 @@ describe('API /orders', () => {
           unitPrice: 1.45,
           requestedQty: 3,
           confirmedQty: null,
+          lotNumber: null,
+          expiryDate: null,
         },
         expect.objectContaining({ saleArticleId: articles.croissant.id, requestedQty: 2 }),
       ])
@@ -329,6 +332,71 @@ describe('API /orders', () => {
         status: 'modified',
         reason: 'No quedan croissants',
       })
+    })
+
+    it('guarda el lote y la caducidad que indique el obrador, también en el albarán', async () => {
+      const order = await createOrder()
+
+      const response = await asAdmin({
+        method: 'POST',
+        url: `${baseUrl}/${order.id}/approve`,
+        payload: {
+          lines: [
+            {
+              saleArticleId: articles.barra.id,
+              confirmedQty: 3,
+              lotNumber: ' L-2410 ',
+              expiryDate: '2026-11-03',
+            },
+            { saleArticleId: articles.croissant.id, confirmedQty: 2, lotNumber: '   ' },
+          ],
+        },
+      })
+      expect(response.statusCode).toBe(200)
+      const approved = response.json<Order>()
+      // Lote y caducidad no cuentan como cambios: sigue siendo una aprobación sin más.
+      expect(approved.status).toBe('approved')
+      expect(approved.lines.map(({ lotNumber, expiryDate }) => ({ lotNumber, expiryDate }))).toEqual([
+        { lotNumber: 'L-2410', expiryDate: '2026-11-03' },
+        { lotNumber: null, expiryDate: null },
+      ])
+
+      const deliveryNote = await DeliveryNoteModel.findOne({ orderId: order.id }).lean()
+      expect(deliveryNote?.lines[0]).toMatchObject({ lotNumber: 'L-2410', expiryDate: '2026-11-03' })
+    })
+
+    it('lo que no se sirve no lleva lote ni caducidad', async () => {
+      const order = await createOrder()
+      const approved = (
+        await asAdmin({
+          method: 'POST',
+          url: `${baseUrl}/${order.id}/approve`,
+          payload: {
+            lines: [
+              {
+                saleArticleId: articles.croissant.id,
+                confirmedQty: 0,
+                lotNumber: 'L-1',
+                expiryDate: '2026-11-03',
+              },
+            ],
+            reason: 'No quedan croissants',
+          },
+        })
+      ).json<Order>()
+      expect(approved.lines[1]).toMatchObject({ confirmedQty: 0, lotNumber: null, expiryDate: null })
+    })
+
+    it('rechaza una caducidad que no es una fecha', async () => {
+      const order = await createOrder()
+      const response = await asAdmin({
+        method: 'POST',
+        url: `${baseUrl}/${order.id}/approve`,
+        payload: {
+          lines: [{ saleArticleId: articles.barra.id, confirmedQty: 3, expiryDate: '2026-13-40' }],
+        },
+      })
+      expect(response.statusCode).toBe(400)
     })
 
     it('aprobar con cambios exige motivo', async () => {

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
+import { isoDateSchema, isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { packageFormatSchema } from '../sale-articles/package-format'
 
 /** Línea del albarán: copia del artículo del pedido con lo pedido y lo que sirve el obrador. */
@@ -16,6 +16,9 @@ export const deliveryNoteLineSchema = z.object({
   requestedQty: z.number().int(),
   /** Formatos que sirve el obrador (0 = no se sirve). */
   deliveredQty: z.number().int(),
+  /** Nº de lote y caducidad de lo servido, si el obrador los ha indicado. */
+  lotNumber: z.string().nullable(),
+  expiryDate: isoDateSchema.nullable(),
 })
 export type DeliveryNoteLine = z.infer<typeof deliveryNoteLineSchema>
 

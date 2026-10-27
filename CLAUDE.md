@@ -31,7 +31,8 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   Pendiente: si el login pasa a ser contra Amoenus (ver `docs/integracion-amoenus-central.md`).
 - Pedidos (`orders`): pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (filtro
   multiestado, orden por fecha de creación, Aprobar/Editar por fila) y ficha con aprobación (ajustando
-  cantidades → `modified`), rechazo con motivo y cancelación por la tienda. Sin módulo `stores` aún:
+  cantidades → `modified`; Nº de lote y caducidad opcionales por artículo, que pasan al albarán pero
+  no a Amoenus), rechazo con motivo y cancelación por la tienda. Sin módulo `stores` aún:
   el pedido guarda el `storeName` del usuario.
 - Descartado: las pantallas Historial, Entregas e Incidencias no forman parte de la aplicación.
 - Siguiente: módulo `stores`, preparación/entrega y albarán PDF (el albarán ya existe en datos).

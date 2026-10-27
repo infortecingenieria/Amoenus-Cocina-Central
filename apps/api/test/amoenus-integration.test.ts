@@ -136,6 +136,8 @@ describe('API /integrations/amoenus', () => {
           unitPrice: 1.45,
           requestedQty: 3,
           confirmedQty: null,
+          lotNumber: null,
+          expiryDate: null,
         },
         expect.objectContaining({ saleArticleId: articles.croissant.id, requestedQty: 2 }),
       ])
