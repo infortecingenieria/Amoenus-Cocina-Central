@@ -116,8 +116,11 @@ export const orderSourceSchema = z.object({
 })
 export type OrderSource = z.infer<typeof orderSourceSchema>
 
-/** Qué se comunica a Amoenus de un pedido que viene de allí: el albarán al aprobar o el rechazo. */
-export const AMOENUS_SYNC_EVENTS = ['delivery_note', 'rejection'] as const
+/**
+ * Qué se comunica a Amoenus. De un pedido que viene de allí, el albarán al aprobar o el rechazo; de
+ * un pedido de una tienda vinculada a un local de Amoenus, el pedido con su albarán al aprobar.
+ */
+export const AMOENUS_SYNC_EVENTS = ['delivery_note', 'rejection', 'store_order'] as const
 export const AMOENUS_SYNC_STATUSES = ['pending', 'sent', 'failed'] as const
 export type AmoenusSyncStatus = (typeof AMOENUS_SYNC_STATUSES)[number]
 
@@ -142,9 +145,14 @@ const orderBaseSchema = z.object({
   notes: z.string().nullable(),
   /** null = lo ha hecho la tienda desde esta aplicación. */
   source: orderSourceSchema.nullable(),
+  /**
+   * Local de Amoenus de la tienda que hizo el pedido, si la tienda está vinculada (copia del usuario
+   * al crear el pedido). Al aprobarlo, el pedido se da de alta en Amoenus con su albarán.
+   */
+  amoenusLocalId: z.string().nullable(),
   /** Albarán generado al aprobar; null mientras el pedido no se ha aprobado. */
   deliveryNote: deliveryNoteRefSchema.nullable(),
-  /** Solo en los pedidos que vienen de Amoenus y ya se han resuelto (aprobado o rechazado). */
+  /** Solo en los pedidos que vienen de Amoenus o de una tienda vinculada, una vez resueltos. */
   amoenusSync: amoenusSyncSchema.nullable(),
   /** Importe con las cantidades confirmadas o, si aún no las hay, las pedidas. */
   total: z.number(),

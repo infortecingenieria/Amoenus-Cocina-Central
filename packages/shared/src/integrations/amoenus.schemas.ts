@@ -57,27 +57,50 @@ export type AmoenusOrderData = z.output<typeof amoenusOrderSchema>
 
 // --- Envíos de Cocina Central a Amoenus ------------------------------------------------------
 
+/** Albarán tal y como lo recibe Amoenus: lo pedido y lo servido de cada artículo, por su código. */
+export const amoenusDeliveryNoteSchema = z.object({
+  number: z.string(),
+  issuedAt: isoDateTimeSchema,
+  lines: z.array(
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      requestedQty: z.number().int(),
+      deliveredQty: z.number().int(),
+      unitPrice: z.number(),
+    }),
+  ),
+})
+export type AmoenusDeliveryNote = z.infer<typeof amoenusDeliveryNoteSchema>
+
 /** Albarán que se envía a Amoenus al aprobar un pedido suyo: el pedido se corrige con lo servido. */
 export const amoenusDeliveryNotePayloadSchema = z.object({
   /** `_id` del pedido a proveedor en Amoenus (`source.externalOrderId`). */
   externalOrderId: z.string(),
   /** Número del pedido en Cocina Central («PED-2026-0001»), que Amoenus guarda en `orderCode`. */
   orderNumber: z.string(),
-  deliveryNote: z.object({
-    number: z.string(),
-    issuedAt: isoDateTimeSchema,
-    lines: z.array(
-      z.object({
-        code: z.string(),
-        name: z.string(),
-        requestedQty: z.number().int(),
-        deliveredQty: z.number().int(),
-        unitPrice: z.number(),
-      }),
-    ),
-  }),
+  deliveryNote: amoenusDeliveryNoteSchema,
 })
 export type AmoenusDeliveryNotePayload = z.infer<typeof amoenusDeliveryNotePayloadSchema>
+
+/**
+ * Pedido de una tienda vinculada a un local de Amoenus, aprobado por el obrador. Amoenus lo da de
+ * alta como pedido a proveedor (Cocina Central) del local, ya con su albarán.
+ */
+export const amoenusStoreOrderPayloadSchema = z.object({
+  /** `id` del pedido en Cocina Central. */
+  orderId: objectIdSchema,
+  /** «PED-2026-0001»: identifica el pedido en Amoenus (`orderCode`), así que reenviarlo no lo duplica. */
+  orderNumber: z.string(),
+  /** Local de Amoenus de la tienda. El cliente lo sabe Amoenus por la clave de API. */
+  localId: z.string(),
+  storeName: z.string(),
+  createdByName: z.string(),
+  createdAt: isoDateTimeSchema,
+  notes: z.string().nullable(),
+  deliveryNote: amoenusDeliveryNoteSchema,
+})
+export type AmoenusStoreOrderPayload = z.infer<typeof amoenusStoreOrderPayloadSchema>
 
 /** Rechazo de un pedido de Amoenus: allí queda marcado como rechazado y no se puede recepcionar. */
 export const amoenusRejectionPayloadSchema = z.object({

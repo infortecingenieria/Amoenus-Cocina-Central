@@ -2,12 +2,14 @@ import {
   INTEGRATION_API_KEY_HEADER,
   type AmoenusDeliveryNotePayload,
   type AmoenusRejectionPayload,
+  type AmoenusStoreOrderPayload,
 } from '@cocina-central/shared'
 
 /** Lo que Cocina Central comunica a Amoenus. Se inyecta para poder sustituirlo en los tests. */
 export interface AmoenusClient {
   sendDeliveryNote(payload: AmoenusDeliveryNotePayload): Promise<void>
   sendRejection(payload: AmoenusRejectionPayload): Promise<void>
+  sendStoreOrder(payload: AmoenusStoreOrderPayload): Promise<void>
 }
 
 export interface HttpAmoenusClientOptions {
@@ -55,6 +57,10 @@ export class HttpAmoenusClient implements AmoenusClient {
 
   sendRejection(payload: AmoenusRejectionPayload): Promise<void> {
     return this.post('/warehouses/cocina-central/rejections', payload)
+  }
+
+  sendStoreOrder(payload: AmoenusStoreOrderPayload): Promise<void> {
+    return this.post('/warehouses/cocina-central/orders', payload)
   }
 
   private async post(path: string, payload: unknown): Promise<void> {

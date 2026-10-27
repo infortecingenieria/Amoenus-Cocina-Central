@@ -23,6 +23,7 @@ import {
   ValidationError,
   type ValidationIssue,
 } from '../../shared/errors'
+import type { UserRepository } from '../auth/user.repository'
 import type { DeliveryNoteService } from '../delivery-notes/delivery-note.service'
 import type { AmoenusSyncService } from '../integrations/amoenus/amoenus-sync.service'
 import type { SaleArticleRepository } from '../sale-articles/sale-article.repository'
@@ -41,6 +42,8 @@ export interface NewOrderRequest {
   lines: CreateOrderData['lines']
   author: OrderAuthor
   source: OrderSource | null
+  /** Local de Amoenus de la tienda, si está vinculada. */
+  amoenusLocalId?: string | null
 }
 
 /** Verbo de cada acción para los mensajes de error. */
@@ -57,17 +60,20 @@ export class OrderService {
   private readonly saleArticles: SaleArticleRepository
   private readonly deliveryNotes: DeliveryNoteService
   private readonly amoenusSync: AmoenusSyncService
+  private readonly users: UserRepository
 
   constructor(
     repository: OrderRepository,
     saleArticles: SaleArticleRepository,
     deliveryNotes: DeliveryNoteService,
     amoenusSync: AmoenusSyncService,
+    users: UserRepository,
   ) {
     this.repository = repository
     this.saleArticles = saleArticles
     this.deliveryNotes = deliveryNotes
     this.amoenusSync = amoenusSync
+    this.users = users
   }
 
   /** La tienda solo ve sus pedidos; el obrador, todos. */
@@ -95,14 +101,27 @@ export class OrderService {
 
   async create(data: CreateOrderData, user: AuthUser): Promise<Order> {
     if (!user.storeName) throw new ForbiddenError('Tu usuario no tiene ninguna tienda asignada')
-    return this.createFor({ ...data, storeName: user.storeName, author: user, source: null })
+    return this.createFor({
+      ...data,
+      storeName: user.storeName,
+      author: user,
+      source: null,
+      amoenusLocalId: await this.users.findAmoenusLocalId(user.id),
+    })
   }
 
   /**
    * Alta de un pedido pendiente para una tienda. La usan la propia tienda y las integraciones
    * (Amoenus), para que todos los pedidos compartan validación de artículos y numeración.
    */
-  async createFor({ storeName, notes, lines, author, source }: NewOrderRequest): Promise<Order> {
+  async createFor({
+    storeName,
+    notes,
+    lines,
+    author,
+    source,
+    amoenusLocalId = null,
+  }: NewOrderRequest): Promise<Order> {
     const orderLines = await this.buildLines(lines)
     const year = currentYear()
     const number = formatOrderNumber(year, await nextSequence(`order-${year}`))
@@ -112,6 +131,7 @@ export class OrderService {
       storeName,
       notes: notes || null,
       source,
+      amoenusLocalId,
       lines: orderLines,
       createdBy: { id: author.id, displayName: author.displayName },
       firstEntry: this.historyEntry('pending', author),
@@ -158,20 +178,26 @@ export class OrderService {
       ? await this.applyTransition(order, 'modified', user, { lines, reason: data.reason })
       : await this.applyTransition(order, 'approved', user, { lines })
 
-    // Al aprobar se emite el albarán con lo que se sirve y, si el pedido es de Amoenus, se le envía.
+    // Al aprobar se emite el albarán con lo que se sirve y se envía a Amoenus: si el pedido es de
+    // allí, el albarán; si es de una tienda vinculada a un local, el pedido con su albarán.
     const deliveryNote = await this.deliveryNotes.createForOrder(approved)
     await this.repository.setDeliveryNote(approved.id, {
       id: deliveryNote.id,
       number: deliveryNote.number,
     })
-    await this.amoenusSync.queue(approved, 'delivery_note')
+    if (approved.source?.system === 'amoenus') {
+      await this.amoenusSync.queue(approved, 'delivery_note')
+    } else if (approved.amoenusLocalId) {
+      await this.amoenusSync.queue(approved, 'store_order')
+    }
     return this.reload(approved.id)
   }
 
+  /** Solo se avisa a Amoenus si el pedido es de allí: el de una tienda nunca llegó a existir allí. */
   async reject(id: string, { reason }: RejectOrderInput, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
     const rejected = await this.applyTransition(order, 'rejected', user, { reason })
-    await this.amoenusSync.queue(rejected, 'rejection')
+    if (rejected.source?.system === 'amoenus') await this.amoenusSync.queue(rejected, 'rejection')
     return this.reload(rejected.id)
   }
 

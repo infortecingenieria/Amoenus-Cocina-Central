@@ -1,4 +1,4 @@
-import type { AmoenusSync, Order } from '@cocina-central/shared'
+import type { AmoenusDeliveryNote, AmoenusSync, Order } from '@cocina-central/shared'
 
 import type { DeliveryNoteRepository } from '../../delivery-notes/delivery-note.repository'
 import type { OrderRepository } from '../../orders/order.repository'
@@ -6,8 +6,13 @@ import type { AmoenusClient } from './amoenus.client'
 
 type AmoenusSyncEvent = AmoenusSync['event']
 
+/** Pedidos que se comunican a Amoenus: los que vienen de allí y los de tiendas vinculadas a un local. */
+const isSyncedWithAmoenus = (order: Order): boolean =>
+  order.source?.system === 'amoenus' || order.amoenusLocalId !== null
+
 /**
- * Comunica a Amoenus cómo ha resuelto el obrador sus pedidos: el albarán al aprobar o el rechazo.
+ * Comunica a Amoenus cómo ha resuelto el obrador los pedidos: de los suyos, el albarán al aprobar
+ * o el rechazo; de los de una tienda vinculada, el pedido con su albarán al aprobar.
  * El estado del envío queda en `order.amoenusSync`; si Amoenus no responde, el pedido sigue
  * resuelto aquí y el envío se reintenta (`retryUnsent`) o se reenvía a mano.
  */
@@ -28,7 +33,7 @@ export class AmoenusSyncService {
 
   /** Deja el envío pendiente y lo intenta en el momento. Nunca lanza: el fallo queda en el pedido. */
   async queue(order: Order, event: AmoenusSyncEvent): Promise<void> {
-    if (order.source?.system !== 'amoenus') return
+    if (!isSyncedWithAmoenus(order)) return
     await this.orders.setAmoenusSync(order.id, {
       event,
       status: 'pending',
@@ -43,7 +48,7 @@ export class AmoenusSyncService {
   /** Envía (o reenvía) lo que esté pendiente del pedido y guarda el resultado. */
   async send(orderId: string): Promise<AmoenusSync | null> {
     const order = await this.orders.findById(orderId)
-    if (!order?.amoenusSync || order.source?.system !== 'amoenus') return null
+    if (!order?.amoenusSync || !isSyncedWithAmoenus(order)) return null
 
     const sync = order.amoenusSync
     const now = new Date().toISOString()
@@ -81,24 +86,27 @@ export class AmoenusSyncService {
   }
 
   private async deliver(order: Order, event: AmoenusSyncEvent): Promise<void> {
+    if (event === 'store_order') {
+      if (!order.amoenusLocalId) throw new Error('La tienda del pedido no está vinculada a Amoenus')
+      await this.client.sendStoreOrder({
+        orderId: order.id,
+        orderNumber: order.number,
+        localId: order.amoenusLocalId,
+        storeName: order.storeName,
+        createdByName: order.createdBy.displayName,
+        createdAt: order.createdAt,
+        notes: order.notes,
+        deliveryNote: await this.buildDeliveryNote(order),
+      })
+      return
+    }
+
     const source = order.source as NonNullable<Order['source']>
     if (event === 'delivery_note') {
-      const deliveryNote = await this.deliveryNotes.findByOrderId(order.id)
-      if (!deliveryNote) throw new Error('El pedido no tiene albarán')
       await this.client.sendDeliveryNote({
         externalOrderId: source.externalOrderId,
         orderNumber: order.number,
-        deliveryNote: {
-          number: deliveryNote.number,
-          issuedAt: deliveryNote.issuedAt,
-          lines: deliveryNote.lines.map((line) => ({
-            code: line.code,
-            name: line.name,
-            requestedQty: line.requestedQty,
-            deliveredQty: line.deliveredQty,
-            unitPrice: line.unitPrice,
-          })),
-        },
+        deliveryNote: await this.buildDeliveryNote(order),
       })
       return
     }
@@ -112,5 +120,21 @@ export class AmoenusSyncService {
       rejectedAt: rejection.at,
       rejectedBy: rejection.userName,
     })
+  }
+
+  private async buildDeliveryNote(order: Order): Promise<AmoenusDeliveryNote> {
+    const deliveryNote = await this.deliveryNotes.findByOrderId(order.id)
+    if (!deliveryNote) throw new Error('El pedido no tiene albarán')
+    return {
+      number: deliveryNote.number,
+      issuedAt: deliveryNote.issuedAt,
+      lines: deliveryNote.lines.map((line) => ({
+        code: line.code,
+        name: line.name,
+        requestedQty: line.requestedQty,
+        deliveredQty: line.deliveredQty,
+        unitPrice: line.unitPrice,
+      })),
+    }
   }
 }

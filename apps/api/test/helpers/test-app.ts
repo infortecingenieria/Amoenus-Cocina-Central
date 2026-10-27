@@ -1,6 +1,7 @@
 import type {
   AmoenusDeliveryNotePayload,
   AmoenusRejectionPayload,
+  AmoenusStoreOrderPayload,
   UserRole,
 } from '@cocina-central/shared'
 import { MongoMemoryServer } from 'mongodb-memory-server'
@@ -17,7 +18,7 @@ export interface TestContext {
 }
 
 /** Ids fijos de los usuarios ficticios: el token no exige que existan en la base de datos. */
-const TEST_USER_IDS: Record<UserRole, string> = {
+export const TEST_USER_IDS: Record<UserRole, string> = {
   kitchen_admin: '64b7f0c2a1b2c3d4e5f60001',
   store: '64b7f0c2a1b2c3d4e5f60002',
 }
@@ -32,6 +33,7 @@ export const TEST_AMOENUS_API_KEY = 'clave-de-amoenus-de-pruebas-de-al-menos-32-
 export class FakeAmoenusClient implements AmoenusClient {
   deliveryNotes: AmoenusDeliveryNotePayload[] = []
   rejections: AmoenusRejectionPayload[] = []
+  storeOrders: AmoenusStoreOrderPayload[] = []
   failing = false
 
   async sendDeliveryNote(payload: AmoenusDeliveryNotePayload): Promise<void> {
@@ -44,9 +46,15 @@ export class FakeAmoenusClient implements AmoenusClient {
     this.rejections.push(payload)
   }
 
+  async sendStoreOrder(payload: AmoenusStoreOrderPayload): Promise<void> {
+    if (this.failing) throw new Error('Amoenus no está disponible')
+    this.storeOrders.push(payload)
+  }
+
   reset(): void {
     this.deliveryNotes = []
     this.rejections = []
+    this.storeOrders = []
     this.failing = false
   }
 }

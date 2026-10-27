@@ -122,10 +122,11 @@ async function cancel(current: Order) {
   }
 }
 
-// Envío a Amoenus del albarán o del rechazo (pedidos que vienen de allí). Solo lo ve el obrador.
+// Envío a Amoenus (pedidos que vienen de allí o de una tienda vinculada). Solo lo ve el obrador.
 const AMOENUS_SYNC_EVENT_LABELS: Record<AmoenusSync['event'], string> = {
   delivery_note: 'Albarán',
   rejection: 'Rechazo',
+  store_order: 'Pedido y albarán',
 }
 const AMOENUS_SYNC_STATUS_LABELS: Record<AmoenusSync['status'], string> = {
   pending: 'pendiente de enviar',

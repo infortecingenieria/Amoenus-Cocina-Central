@@ -8,11 +8,13 @@ import type {
 import type { InjectOptions } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { UserModel } from '../src/modules/auth/user.model'
 import {
   clearDatabase,
   createTestApp,
   FakeAmoenusClient,
   TEST_AMOENUS_API_KEY,
+  TEST_USER_IDS,
   type TestContext,
 } from './helpers/test-app'
 
@@ -257,6 +259,125 @@ describe('Albaranes y envíos a Amoenus', () => {
         url: `/api/v1/orders/${order.id}/amoenus-sync`,
       })
       expect(response.statusCode).toBe(403)
+    })
+  })
+
+  describe('pedidos de una tienda vinculada a un local de Amoenus', () => {
+    const LOCAL_ID = '6ad2118ea308181751f12e16'
+
+    /** El usuario de tienda de los tests, guardado con el vínculo a su local de Amoenus. */
+    async function linkStoreToAmoenus() {
+      await UserModel.create({
+        _id: TEST_USER_IDS.store,
+        username: 'store',
+        passwordHash: 'sin-uso',
+        displayName: 'store',
+        role: 'store',
+        storeName: 'Tienda de pruebas',
+        amoenusLocalId: LOCAL_ID,
+      })
+    }
+
+    async function storeOrder() {
+      const response = await asStore({
+        method: 'POST',
+        url: '/api/v1/orders',
+        payload: {
+          notes: 'Para el sábado',
+          lines: [
+            { saleArticleId: articles.barra.id, quantity: 3 },
+            { saleArticleId: articles.croissant.id, quantity: 2 },
+          ],
+        },
+      })
+      expect(response.statusCode).toBe(201)
+      return response.json<Order>()
+    }
+
+    it('el pedido guarda el local de Amoenus de la tienda', async () => {
+      await linkStoreToAmoenus()
+      expect((await storeOrder()).amoenusLocalId).toBe(LOCAL_ID)
+    })
+
+    it('al aprobarlo envía a Amoenus el pedido con su albarán', async () => {
+      await linkStoreToAmoenus()
+      const order = await storeOrder()
+      const approved = (
+        await approve(order.id, {
+          lines: [{ saleArticleId: articles.croissant.id, confirmedQty: 1 }],
+          reason: 'Solo queda una caja',
+        })
+      ).json<Order>()
+
+      expect(approved.amoenusSync).toMatchObject({ event: 'store_order', status: 'sent' })
+      expect(amoenus.storeOrders).toEqual([
+        {
+          orderId: order.id,
+          orderNumber: order.number,
+          localId: LOCAL_ID,
+          storeName: 'Tienda de pruebas',
+          createdByName: 'store',
+          createdAt: order.createdAt,
+          notes: 'Para el sábado',
+          deliveryNote: {
+            number: approved.deliveryNote?.number,
+            issuedAt: expect.any(String),
+            lines: [
+              {
+                code: '10001',
+                name: 'Barra Rústica Tradicional',
+                requestedQty: 3,
+                deliveredQty: 3,
+                unitPrice: 1.45,
+              },
+              {
+                code: '20001',
+                name: 'Croissant Mantequilla',
+                requestedQty: 2,
+                deliveredQty: 1,
+                unitPrice: 0.85,
+              },
+            ],
+          },
+        },
+      ])
+      expect(amoenus.deliveryNotes).toHaveLength(0)
+    })
+
+    it('si la tienda no está vinculada no se envía nada', async () => {
+      const order = await storeOrder()
+      expect(order.amoenusLocalId).toBeNull()
+      const approved = (await approve(order.id)).json<Order>()
+      expect(approved.amoenusSync).toBeNull()
+      expect(amoenus.storeOrders).toHaveLength(0)
+    })
+
+    it('al rechazarlo no se envía nada: en Amoenus no existe', async () => {
+      await linkStoreToAmoenus()
+      const order = await storeOrder()
+      const rejected = (
+        await asAdmin({
+          method: 'POST',
+          url: `/api/v1/orders/${order.id}/reject`,
+          payload: { reason: 'Fuera de plazo' },
+        })
+      ).json<Order>()
+      expect(rejected.amoenusSync).toBeNull()
+      expect(amoenus.rejections).toHaveLength(0)
+    })
+
+    it('si Amoenus no responde, se reintenta como el resto de envíos', async () => {
+      await linkStoreToAmoenus()
+      const order = await storeOrder()
+      amoenus.failing = true
+      expect((await approve(order.id)).json<Order>().amoenusSync).toMatchObject({
+        event: 'store_order',
+        status: 'failed',
+      })
+
+      amoenus.failing = false
+      expect(await ctx.app.amoenusSync.retryUnsent()).toBe(1)
+      expect(amoenus.storeOrders).toHaveLength(1)
     })
   })
 })

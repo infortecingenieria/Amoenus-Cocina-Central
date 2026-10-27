@@ -43,9 +43,11 @@ export interface OrderRecord {
   notes: string | null
   /** Ausente o null en los pedidos hechos desde esta aplicación. */
   source?: OrderSource | null
+  /** Local de Amoenus de la tienda, si está vinculada (copia del usuario al crear el pedido). */
+  amoenusLocalId?: string | null
   /** Albarán generado al aprobar. */
   deliveryNote?: { id: Types.ObjectId; number: string } | null
-  /** Envío a Amoenus del albarán o del rechazo (solo pedidos que vienen de allí). */
+  /** Envío a Amoenus (pedidos que vienen de allí o de una tienda vinculada). */
   amoenusSync?: AmoenusSyncRecord | null
   lines: OrderLineRecord[]
   statusHistory: OrderStatusEntryRecord[]
@@ -116,6 +118,7 @@ const orderSchema = new Schema<OrderRecord>(
     status: { type: String, enum: ORDER_STATUSES, required: true, default: 'pending' },
     notes: { type: String, default: null },
     source: { type: orderSourceSchema, default: null },
+    amoenusLocalId: { type: String, default: null },
     deliveryNote: { type: deliveryNoteRefSchema, default: null },
     amoenusSync: { type: amoenusSyncSchema, default: null },
     lines: { type: [orderLineSchema], required: true },

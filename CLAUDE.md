@@ -19,12 +19,15 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   artículos de venta y de sus familias (API + web + tests; familia opcional, filtro por familia).
 - Login propio con usuario y contraseña (colección `users`, JWT en `Authorization: Bearer`). Toda la
   API salvo `/auth/login` y `/health` exige sesión; las escrituras usan `app.requireRole(...)`.
-  `pnpm db:seed` crea los usuarios `admin` y `tienda` (contraseñas de desarrollo en `seed.ts`).
+  `pnpm db:seed` crea los usuarios `admin` y `tienda`, y las tiendas de La Empanadera vinculadas a
+  Amoenus `granvia`, `villaverde` y `quintana` (contraseñas de desarrollo en `seed.ts`).
 - Integración con Amoenus Central (`modules/integrations/amoenus`): los pedidos a proveedor que hace un
   local en Amoenus llegan como solicitudes `pending` por `POST /api/v1/integrations/amoenus/orders`, con
   clave de API (`AMOENUS_API_KEY`), artículos por código y `source` en el pedido. Al aprobar se genera el
   albarán (`modules/delivery-notes`, `ALB-AAAA-NNNN`) y, si el pedido es de Amoenus, se le envía el albarán
   o el rechazo (`AmoenusSyncService`, `AMOENUS_API_URL`, reintento cada 5 min y «Reenviar a Amoenus»).
+  Las tiendas vinculadas a un local de Amoenus (`users.amoenusLocalId`, copiado al pedido) envían al
+  aprobar el pedido con su albarán (evento `store_order`), y Amoenus lo da de alta como pedido a proveedor.
   Pendiente: si el login pasa a ser contra Amoenus (ver `docs/integracion-amoenus-central.md`).
 - Pedidos (`orders`): pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (filtro
   multiestado, orden por fecha de creación, Aprobar/Editar por fila) y ficha con aprobación (ajustando

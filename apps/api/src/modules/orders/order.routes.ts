@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 
+import { UserRepository } from '../auth/user.repository'
 import { DeliveryNoteRepository } from '../delivery-notes/delivery-note.repository'
 import { DeliveryNoteService } from '../delivery-notes/delivery-note.service'
 import { SaleArticleRepository } from '../sale-articles/sale-article.repository'
@@ -23,6 +24,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
       new SaleArticleRepository(),
       new DeliveryNoteService(new DeliveryNoteRepository()),
       app.amoenusSync,
+      new UserRepository(),
     ),
   )
 

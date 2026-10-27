@@ -66,6 +66,31 @@ Cocina Central (OrderService.approve / reject → AmoenusSyncService)
   del albarán (en rojo si hay cambios) en lugar de «Recepcionar pedido», y la entrada se crea a mano
   desde él. Un rechazo marca el pedido `rejected` con `cocinaCentralRejection` (motivo, fecha, usuario).
 
+## Pedidos de tienda en Cocina Central → pedido y albarán en Amoenus
+
+Una tienda puede estar **vinculada a un local de Amoenus** (`users.amoenusLocalId`; en desarrollo, los
+usuarios `granvia`, `villaverde` y `quintana` del seed, de La Empanadera). El vínculo se copia al pedido al
+crearlo (`order.amoenusLocalId`). Cuando el obrador **aprueba** un pedido de una tienda vinculada, se envía a
+Amoenus el pedido con su albarán, y Amoenus lo da de alta como pedido a proveedor (Cocina Central) de ese
+local. Los pedidos de tiendas sin vincular, y los rechazados o cancelados, no se envían.
+
+```
+Cocina Central (OrderService.approve → AmoenusSyncService, evento store_order)
+  └─ POST {AMOENUS_API_URL}/warehouses/cocina-central/orders   X-Api-Key: <AMOENUS_API_KEY>
+       { orderId, orderNumber, localId, storeName, createdByName, createdAt, notes,
+         deliveryNote: { number, issuedAt, lines: [{ code, name, requestedQty, deliveredQty, unitPrice }] } }
+  ◄─ 200 { success: true } · 400 { success: false, message }
+```
+
+- **Cliente**: no viaja en el pedido; lo determina la clave (`cocinacentralconfigs`), y Amoenus comprueba
+  que el local es de ese cliente.
+- **En Amoenus** se crea el `OrderSupplier` con `orderCode` = número del pedido (`PED-…`),
+  `cocinaCentral: true`, fecha de llegada = fecha del albarán y el usuario de la tienda; después se le
+  aplica el albarán igual que en el apartado anterior. Desde ahí se ve y se recepciona como cualquier
+  pedido a Cocina Central.
+- **Reenvíos**: se identifica por `orderCode`, así que reenviarlo no lo duplica (si aún no está
+  recepcionado, solo sustituye el albarán). Mismos reintentos y «Reenviar a Amoenus» que el albarán.
+
 ## Qué existe hoy en Amoenus Central
 
 **API de integraciones** (`Portal-Corporativo/integrations`, guía en `integrations/API_V2.md`):

@@ -36,6 +36,7 @@ export interface NewOrderData {
   storeName: string
   notes: string | null
   source: OrderSource | null
+  amoenusLocalId: string | null
   lines: OrderLine[]
   createdBy: { id: string; displayName: string }
   firstEntry: OrderStatusEntry
@@ -109,6 +110,7 @@ const toSummaryBase = (record: OrderSummaryRecord) => ({
         localId: record.source.localId,
       }
     : null,
+  amoenusLocalId: record.amoenusLocalId ?? null,
   deliveryNote: record.deliveryNote
     ? { id: record.deliveryNote.id.toString(), number: record.deliveryNote.number }
     : null,
@@ -219,6 +221,7 @@ export class OrderRepository {
       status: data.firstEntry.status,
       notes: data.notes,
       source: data.source,
+      amoenusLocalId: data.amoenusLocalId,
       lines: data.lines.map(toLineRecord),
       statusHistory: [toEntryRecord(data.firstEntry)],
       createdBy: {

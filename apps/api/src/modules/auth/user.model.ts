@@ -10,6 +10,8 @@ export interface UserRecord {
   displayName: string
   role: UserRole
   storeName: string | null
+  /** Local de Amoenus de la tienda: sus pedidos aprobados se dan de alta allí. null = sin vincular. */
+  amoenusLocalId: string | null
   active: boolean
   createdAt: Date
   updatedAt: Date
@@ -22,6 +24,7 @@ const userSchema = new Schema<UserRecord>(
     displayName: { type: String, required: true, trim: true },
     role: { type: String, enum: USER_ROLES, required: true },
     storeName: { type: String, default: null },
+    amoenusLocalId: { type: String, default: null },
     active: { type: Boolean, default: true },
   },
   { collection: 'users', timestamps: true },

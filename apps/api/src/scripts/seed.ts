@@ -36,6 +36,32 @@ const USERS: (Omit<UpsertUserData, 'passwordHash'> & { password: string })[] = [
     role: 'store',
     storeName: 'Tienda Mayor',
   },
+  // Tiendas de La Empanadera vinculadas a sus locales de Amoenus: sus pedidos aprobados se dan
+  // de alta allí. Se llaman igual que el local, como los pedidos que llegan de Amoenus.
+  ...[
+    {
+      username: 'granvia',
+      storeName: 'La Empanadera Gran Via',
+      localId: '6ad2118ea308181751f12e16',
+    },
+    {
+      username: 'villaverde',
+      storeName: 'La Empanadera Villaverde',
+      localId: '6ad2118ea308181751f12e17',
+    },
+    {
+      username: 'quintana',
+      storeName: 'La Empanadera Quintana',
+      localId: '6ad2118ea308181751f12e18',
+    },
+  ].map(({ username, storeName, localId }) => ({
+    username,
+    password: process.env.SEED_STORE_PASSWORD ?? 'tienda',
+    displayName: storeName,
+    role: 'store' as const,
+    storeName,
+    amoenusLocalId: localId,
+  })),
 ]
 
 const FAMILIES = ['Panadería', 'Bollería', 'Salados'] as const

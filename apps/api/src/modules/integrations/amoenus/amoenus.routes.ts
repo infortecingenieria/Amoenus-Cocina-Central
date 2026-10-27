@@ -37,6 +37,7 @@ export const amoenusIntegrationRoutes: FastifyPluginAsyncZod<AmoenusRoutesOption
 ) => {
   const orderRepository = new OrderRepository()
   const saleArticles = new SaleArticleRepository()
+  const users = new UserRepository()
   const controller = new AmoenusIntegrationController(
     new AmoenusIntegrationService(
       new OrderService(
@@ -44,10 +45,11 @@ export const amoenusIntegrationRoutes: FastifyPluginAsyncZod<AmoenusRoutesOption
         saleArticles,
         new DeliveryNoteService(new DeliveryNoteRepository()),
         app.amoenusSync,
+        users,
       ),
       orderRepository,
       saleArticles,
-      new UserRepository(),
+      users,
     ),
   )
 

@@ -16,6 +16,8 @@ export interface UpsertUserData {
   displayName: string
   role: UserRole
   storeName: string | null
+  /** Local de Amoenus de la tienda (ver `UserRecord.amoenusLocalId`). */
+  amoenusLocalId?: string | null
   active?: boolean
 }
 
@@ -41,6 +43,18 @@ export class UserRepository {
     if (!isValidObjectId(id)) return null
     const record = await UserModel.findOne({ _id: id, active: true }).lean<UserRecord>()
     return record ? toAuthUser(record) : null
+  }
+
+  /**
+   * Local de Amoenus al que está vinculada la tienda del usuario. Se lee de la BD (no va en la
+   * sesión) para que un cambio de vínculo valga sin volver a iniciar sesión.
+   */
+  async findAmoenusLocalId(id: string): Promise<string | null> {
+    if (!isValidObjectId(id)) return null
+    const record = await UserModel.findById(id, { amoenusLocalId: 1 }).lean<
+      Pick<UserRecord, 'amoenusLocalId'>
+    >()
+    return record?.amoenusLocalId ?? null
   }
 
   /** Crea o actualiza por `username`. Pensado para el seed y los tests. */
