@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { isoDateSchema, isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { paginatedSchema, paginationQuerySchema } from '../common/pagination'
 import { deliveryNoteRefSchema } from '../delivery-notes/delivery-note.schemas'
-import { amoenusOrderLinkSchema } from '../integrations/amoenus-link.schemas'
+import { amoenusOrderLinkSchema, amoenusSaleSchema } from '../integrations/amoenus-link.schemas'
 import { packageFormatSchema } from '../sale-articles/package-format'
 import { orderStatusSchema, type OrderStatus } from './order-status'
 
@@ -132,6 +132,8 @@ const orderBaseSchema = z.object({
    * usuario al crearlo). null = pedido de una tienda sin vincular.
    */
   amoenus: amoenusOrderLinkSchema.nullable(),
+  /** Venta registrada en Amoenus como ticket; null si el pedido no tiene venta que enviar. */
+  amoenusSale: amoenusSaleSchema.nullable(),
   /** Albarán generado al aprobar; null mientras el pedido no se ha aprobado. */
   deliveryNote: deliveryNoteRefSchema.nullable(),
   /** Importe con las cantidades confirmadas o, si aún no las hay, las pedidas. */

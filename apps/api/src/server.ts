@@ -20,6 +20,12 @@ const scheduleAmoenusRetry = () => {
     } catch (error) {
       app.log.error({ err: error }, 'Error reintentando envíos a Amoenus')
     }
+    try {
+      const sales = await app.amoenusSales.retryUnsent()
+      if (sales > 0) app.log.info(`Ventas reenviadas a Amoenus: ${sales}`)
+    } catch (error) {
+      app.log.error({ err: error }, 'Error reintentando ventas a Amoenus')
+    }
     if (!closing) scheduleAmoenusRetry()
   }, AMOENUS_RETRY_INTERVAL_MS)
   amoenusRetry.unref()

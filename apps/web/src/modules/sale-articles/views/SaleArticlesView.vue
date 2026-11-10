@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
   PencilIcon,
   PlusIcon,
+  RefreshCwIcon,
   SearchIcon,
   Trash2Icon,
 } from '@lucide/vue'
@@ -51,7 +52,11 @@ import { formatCurrency } from '@/lib/format'
 import { useFamilyOptions } from '@/modules/families/composables/useFamilies'
 
 import SaleArticleFormDialog from '../components/SaleArticleFormDialog.vue'
-import { useDeleteSaleArticle, useSaleArticleList } from '../composables/useSaleArticles'
+import {
+  useDeleteSaleArticle,
+  useSaleArticleList,
+  useSyncSaleArticlesToAmoenus,
+} from '../composables/useSaleArticles'
 
 const PAGE_SIZE = 20
 const COLUMNS = 6
@@ -120,6 +125,23 @@ async function confirmDelete() {
     toast.error(getErrorMessage(err))
   }
 }
+
+// Cada cambio ya se envía a Amoenus al guardarlo; esto reenvía el catálogo entero por si algo no
+// llegó o ha cambiado el nombre de una familia.
+const syncMutation = useSyncSaleArticlesToAmoenus()
+
+async function syncToAmoenus() {
+  try {
+    const result = await syncMutation.mutateAsync()
+    if (result.error) {
+      toast.error(`No se ha podido enviar el catálogo a Amoenus: ${result.error}`)
+    } else {
+      toast.success(`Catálogo enviado a Amoenus: ${result.articles} artículos`)
+    }
+  } catch (err) {
+    toast.error(getErrorMessage(err))
+  }
+}
 </script>
 
 <template>
@@ -129,10 +151,16 @@ async function confirmDelete() {
         <h1 class="text-2xl font-bold">Artículos de venta</h1>
         <p class="text-muted-foreground">Catálogo que ven las tiendas al hacer un pedido.</p>
       </div>
-      <Button @click="openCreate">
-        <PlusIcon />
-        Nuevo artículo
-      </Button>
+      <div class="flex flex-wrap gap-2">
+        <Button variant="outline" :disabled="syncMutation.isPending.value" @click="syncToAmoenus">
+          <RefreshCwIcon />
+          Sincronizar con Amoenus
+        </Button>
+        <Button @click="openCreate">
+          <PlusIcon />
+          Nuevo artículo
+        </Button>
+      </div>
     </header>
 
     <div class="flex flex-wrap items-center gap-3">

@@ -2,6 +2,8 @@ import {
   INTEGRATION_API_KEY_HEADER,
   type AmoenusDeliveryNotePayload,
   type AmoenusRejectionPayload,
+  type AmoenusSaleArticlesPayload,
+  type AmoenusSaleTicketPayload,
   type AmoenusStoreOrderPayload,
 } from '@cocina-central/shared'
 
@@ -10,6 +12,9 @@ export interface AmoenusClient {
   sendDeliveryNote(payload: AmoenusDeliveryNotePayload): Promise<void>
   sendRejection(payload: AmoenusRejectionPayload): Promise<void>
   sendStoreOrder(payload: AmoenusStoreOrderPayload): Promise<void>
+  /** Venta del obrador: Cocina Central es su TPV. */
+  sendSaleTicket(payload: AmoenusSaleTicketPayload): Promise<void>
+  sendSaleArticles(payload: AmoenusSaleArticlesPayload): Promise<void>
 }
 
 export interface HttpAmoenusClientOptions {
@@ -18,6 +23,9 @@ export interface HttpAmoenusClientOptions {
   apiKey: string | null
   timeoutMs?: number
 }
+
+/** Por debajo de la reserva del envío (`SEND_LEASE_MS`, 60 s). */
+const SALE_TICKET_TIMEOUT_MS = 30_000
 
 /** Cuerpo de error del gateway de Amoenus: `{ success: false, message }`. */
 interface AmoenusResponseBody {
@@ -63,7 +71,16 @@ export class HttpAmoenusClient implements AmoenusClient {
     return this.post('/warehouses/cocina-central/orders', payload)
   }
 
-  private async post(path: string, payload: unknown): Promise<void> {
+  /** Amoenus responde después de recalcular ventas, mix y consumos del día: tarda más. */
+  sendSaleTicket(payload: AmoenusSaleTicketPayload): Promise<void> {
+    return this.post('/sale_loader/cocina-central/tickets', payload, SALE_TICKET_TIMEOUT_MS)
+  }
+
+  sendSaleArticles(payload: AmoenusSaleArticlesPayload): Promise<void> {
+    return this.post('/sale_loader/cocina-central/articles', payload)
+  }
+
+  private async post(path: string, payload: unknown, timeoutMs = this.timeoutMs): Promise<void> {
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('La integración con Amoenus no está configurada (AMOENUS_API_URL)')
     }
@@ -74,7 +91,7 @@ export class HttpAmoenusClient implements AmoenusClient {
         method: 'POST',
         headers: { 'content-type': 'application/json', [INTEGRATION_API_KEY_HEADER]: this.apiKey },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (error) {
       const timedOut = error instanceof Error && error.name === 'TimeoutError'

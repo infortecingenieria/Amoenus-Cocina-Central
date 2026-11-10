@@ -6,6 +6,7 @@ import type {
   getOrderRoute,
   listOrdersRoute,
   rejectOrderRoute,
+  shipOrderRoute,
 } from './order.schemas'
 import type { OrderService } from './order.service'
 
@@ -33,6 +34,9 @@ export class OrderController {
 
   reject = async (request: ZodRequest<typeof rejectOrderRoute>) =>
     this.service.reject(request.params.id, request.body, request.user)
+
+  ship = async (request: ZodRequest<typeof shipOrderRoute>) =>
+    this.service.ship(request.params.id, request.user)
 
   cancel = async (request: ZodRequest<typeof cancelOrderRoute>) =>
     this.service.cancel(request.params.id, request.user)

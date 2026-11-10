@@ -2,6 +2,7 @@
 import {
   amoenusEventFor,
   calculateOrderTotal,
+  canTransition,
   formatPackage,
   isEditableByStore,
   isFromAmoenus,
@@ -11,7 +12,15 @@ import {
   type AmoenusSyncEvent,
   type Order,
 } from '@cocina-central/shared'
-import { ArrowLeftIcon, CheckIcon, CircleXIcon, RefreshCwIcon, XIcon } from '@lucide/vue'
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  CircleXIcon,
+  Loader2Icon,
+  RefreshCwIcon,
+  TruckIcon,
+  XIcon,
+} from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -47,20 +56,31 @@ import ApproveOrderDialog from '../components/ApproveOrderDialog.vue'
 import OrderQuantityField from '../components/OrderQuantityField.vue'
 import OrderStatusBadge from '../components/OrderStatusBadge.vue'
 import RejectOrderDialog from '../components/RejectOrderDialog.vue'
-import { useCancelOrder, useOrder, useResendToAmoenus } from '../composables/useOrders'
+import ShipOrderDialog from '../components/ShipOrderDialog.vue'
+import {
+  isSendingSale,
+  useCancelOrder,
+  useOrder,
+  useResendSaleToAmoenus,
+  useResendToAmoenus,
+} from '../composables/useOrders'
 import { showOrderError } from '../order-errors'
 
 const route = useRoute()
 const session = useSessionStore()
 
 const orderId = computed(() => String(route.params.id))
-const { data: order, isPending, isError, error, refetch } = useOrder(orderId)
+const { data: order, dataUpdatedAt, isPending, isError, error, refetch } = useOrder(orderId)
 
 /**
  * El obrador valida los pedidos pendientes; la tienda puede cancelarlos mientras tanto, salvo los
  * que llegan de Amoenus (allí no se pueden cancelar).
  */
 const canValidate = computed(() => session.isKitchenAdmin && order.value?.status === 'pending')
+/** Ya aprobado: el obrador indica que lo ha enviado a la tienda (registra su venta en Amoenus). */
+const canShip = computed(
+  () => session.isKitchenAdmin && !!order.value && canTransition(order.value.status, 'shipped'),
+)
 const canCancel = computed(
   () =>
     !session.isKitchenAdmin &&
@@ -141,9 +161,10 @@ const statusNote = computed(() => {
   }
 })
 
-// Aprobar (con o sin cambios) y rechazar: siempre con diálogo de confirmación.
+// Aprobar (con o sin cambios), rechazar y enviar: siempre con diálogo de confirmación.
 const approving = ref(false)
 const rejecting = ref(false)
+const shipping = ref(false)
 
 // Cancelar (tienda)
 const cancelMutation = useCancelOrder()
@@ -199,6 +220,34 @@ async function resendToAmoenus(current: Order) {
     showOrderError(err)
   }
 }
+
+// Venta del obrador como ticket de Amoenus (Cocina Central es su TPV). Solo lo ve el obrador.
+const amoenusSale = computed(() => {
+  const sale = session.isKitchenAdmin ? order.value?.amoenusSale : null
+  if (!sale) return null
+  return {
+    // Con la hora de la última consulta: el sondeo la actualiza aunque el pedido no cambie.
+    sending: isSendingSale(order.value, dataUpdatedAt.value),
+    status: sale.sync?.status ?? ('pending' as const),
+    sentAt: sale.sync?.sentAt ?? null,
+    lastError: sale.sync?.lastError ?? null,
+  }
+})
+
+const resendSaleMutation = useResendSaleToAmoenus()
+
+async function resendSaleToAmoenus(current: Order) {
+  try {
+    const sync = (await resendSaleMutation.mutateAsync(current.id)).amoenusSale?.sync
+    if (sync?.status === 'sent') {
+      toast.success(`Ticket del pedido ${current.number} enviado a Amoenus`)
+    } else {
+      toast.error(`No se ha podido enviar el ticket a Amoenus: ${sync?.lastError ?? ''}`)
+    }
+  } catch (err) {
+    showOrderError(err)
+  }
+}
 </script>
 
 <template>
@@ -248,6 +297,10 @@ async function resendToAmoenus(current: Order) {
             {{ hasChanges ? 'Aprobar con cambios' : 'Aprobar' }}
           </Button>
         </div>
+        <Button v-else-if="canShip" @click="shipping = true">
+          <TruckIcon />
+          Marcar como enviado
+        </Button>
         <Button
           v-else-if="canCancel"
           variant="outline"
@@ -315,6 +368,34 @@ async function resendToAmoenus(current: Order) {
           </dd>
           <dd v-if="amoenusSync.lastError" class="text-sm text-muted-foreground">
             {{ amoenusSync.lastError }} · se reintenta cada 5 minutos
+          </dd>
+        </div>
+        <div v-if="amoenusSale">
+          <dt class="text-sm text-muted-foreground">Ticket en Amoenus</dt>
+          <dd v-if="amoenusSale.sending" class="flex items-center gap-2 text-muted-foreground">
+            <Loader2Icon class="size-4 animate-spin" />
+            Enviando a Amoenus…
+          </dd>
+          <dd v-else class="flex flex-wrap items-center gap-2">
+            <span :class="cn(amoenusSale.status === 'failed' && 'text-destructive')">
+              Venta {{ AMOENUS_SYNC_STATUS_LABELS[amoenusSale.status] }}
+              <template v-if="amoenusSale.sentAt">
+                el {{ formatDateTime(amoenusSale.sentAt) }}
+              </template>
+            </span>
+            <Button
+              v-if="amoenusSale.status !== 'sent'"
+              variant="outline"
+              size="sm"
+              :disabled="resendSaleMutation.isPending.value"
+              @click="resendSaleToAmoenus(order)"
+            >
+              <RefreshCwIcon />
+              Reenviar ticket
+            </Button>
+          </dd>
+          <dd v-if="amoenusSale.lastError" class="text-sm text-muted-foreground">
+            {{ amoenusSale.lastError }} · se reintenta cada 5 minutos
           </dd>
         </div>
       </dl>
@@ -451,6 +532,7 @@ async function resendToAmoenus(current: Order) {
 
       <ApproveOrderDialog v-model:open="approving" :order="order" :lines="lines" />
       <RejectOrderDialog v-model:open="rejecting" :order="order" />
+      <ShipOrderDialog v-model:open="shipping" :order="order" />
 
       <AlertDialog v-model:open="cancelling">
         <AlertDialogContent>

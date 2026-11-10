@@ -47,6 +47,12 @@ export type AmoenusLinkRecord = (
   sendingUntil: Date | null
 }
 
+/** Venta del obrador como ticket de Amoenus, con su propio envío (ver `AmoenusSaleService`). */
+export interface AmoenusSaleRecord {
+  sync: AmoenusSyncRecord | null
+  sendingUntil: Date | null
+}
+
 export interface OrderRecord {
   _id: Types.ObjectId
   number: string
@@ -55,6 +61,8 @@ export interface OrderRecord {
   notes: string | null
   /** Vínculo con Amoenus; null en los pedidos de tiendas sin vincular. */
   amoenus?: AmoenusLinkRecord | null
+  /** Ausente o null si no hay venta que registrar en Amoenus. */
+  amoenusSale?: AmoenusSaleRecord | null
   /** Albarán generado al aprobar. */
   deliveryNote?: { id: Types.ObjectId; number: string } | null
   lines: OrderLineRecord[]
@@ -123,6 +131,14 @@ const amoenusLinkSchema = new Schema<AmoenusLinkRecord>(
   { _id: false },
 )
 
+const amoenusSaleSchema = new Schema<AmoenusSaleRecord>(
+  {
+    sync: { type: amoenusSyncSchema, default: null },
+    sendingUntil: { type: Date, default: null },
+  },
+  { _id: false },
+)
+
 const orderSchema = new Schema<OrderRecord>(
   {
     number: { type: String, required: true },
@@ -130,6 +146,7 @@ const orderSchema = new Schema<OrderRecord>(
     status: { type: String, enum: ORDER_STATUSES, required: true, default: 'pending' },
     notes: { type: String, default: null },
     amoenus: { type: amoenusLinkSchema, default: null },
+    amoenusSale: { type: amoenusSaleSchema, default: null },
     deliveryNote: { type: deliveryNoteRefSchema, default: null },
     lines: { type: [orderLineSchema], required: true },
     statusHistory: { type: [orderStatusEntrySchema], default: [] },
@@ -151,6 +168,8 @@ orderSchema.index(
 )
 // Envíos a Amoenus pendientes (ver `findIdsPendingAmoenusSync`).
 orderSchema.index({ 'amoenus.origin': 1, status: 1 })
+// Ventas pendientes de registrar en Amoenus (ver `findIdsPendingAmoenusSync('amoenusSale')`).
+orderSchema.index({ 'amoenusSale.sync.status': 1 })
 // Para saber si un artículo ya se ha pedido (no se puede borrar).
 orderSchema.index({ 'lines.saleArticleId': 1 })
 

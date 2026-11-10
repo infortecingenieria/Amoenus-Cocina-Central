@@ -45,14 +45,27 @@ export interface NewOrderData {
 }
 
 /**
- * Cambio de estado: nuevo estado, entrada del historial y, al aprobar, las líneas confirmadas y el
- * albarán. Todo se guarda en una sola escritura.
+ * Cambio de estado: nuevo estado, entrada del historial y, al aprobar, las líneas confirmadas, el
+ * albarán y la venta pendiente de registrar en Amoenus. Todo se guarda en una sola escritura.
  */
 export interface OrderTransition {
   status: OrderStatus
   entry: OrderStatusEntry
   lines?: OrderLine[]
   deliveryNote?: DeliveryNoteRef
+  amoenusSale?: boolean
+}
+
+/**
+ * Envíos de un pedido a Amoenus, cada uno con su resultado y su reserva: lo que comunica su vínculo
+ * (`amoenus`: albarán, rechazo o pedido de tienda) y la venta del obrador como ticket (`amoenusSale`).
+ */
+export type AmoenusSyncTarget = 'amoenus' | 'amoenusSale'
+
+/** Pedidos que tienen ese envío. */
+const HAS_SYNC_TARGET: Record<AmoenusSyncTarget, QueryFilter<OrderRecord>> = {
+  amoenus: { 'amoenus.origin': { $exists: true } },
+  amoenusSale: { amoenusSale: { $type: 'object' } },
 }
 
 type OrderSummaryRecord = Omit<OrderRecord, 'statusHistory'>
@@ -130,6 +143,9 @@ const toSummaryBase = (record: OrderSummaryRecord) => ({
   status: record.status,
   notes: record.notes,
   amoenus: record.amoenus ? toAmoenusLink(record.amoenus) : null,
+  amoenusSale: record.amoenusSale
+    ? { sync: record.amoenusSale.sync ? toAmoenusSync(record.amoenusSale.sync) : null }
+    : null,
   deliveryNote: record.deliveryNote
     ? { id: record.deliveryNote.id.toString(), number: record.deliveryNote.number }
     : null,
@@ -195,50 +211,66 @@ export class OrderRepository {
   }
 
   /**
-   * Ids de los pedidos con algo que comunicar a Amoenus (`AMOENUS_SYNCED_STATUSES`) que aún no se
-   * ha enviado: nunca intentado o fallido.
+   * Ids de los pedidos con ese envío a Amoenus aún sin hacer: nunca intentado o fallido. Del
+   * vínculo, solo en los estados en que hay algo que comunicar (`AMOENUS_SYNCED_STATUSES`); la venta
+   * solo existe en los pedidos aprobados.
    */
-  async findIdsPendingAmoenusSync(): Promise<string[]> {
-    const records = await OrderModel.find(
-      {
-        'amoenus.sync.status': { $ne: 'sent' },
-        $or: AMOENUS_ORDER_ORIGINS.map((origin) => ({
-          'amoenus.origin': origin,
-          status: { $in: [...AMOENUS_SYNCED_STATUSES[origin]] },
-        })),
-      },
-      { _id: 1 },
-    )
+  async findIdsPendingAmoenusSync(target: AmoenusSyncTarget): Promise<string[]> {
+    const query: QueryFilter<OrderRecord> =
+      target === 'amoenus'
+        ? {
+            'amoenus.sync.status': { $ne: 'sent' },
+            $or: AMOENUS_ORDER_ORIGINS.map((origin) => ({
+              'amoenus.origin': origin,
+              status: { $in: [...AMOENUS_SYNCED_STATUSES[origin]] },
+            })),
+          }
+        : { ...HAS_SYNC_TARGET.amoenusSale, 'amoenusSale.sync.status': { $ne: 'sent' } }
+    const records = await OrderModel.find(query, { _id: 1 })
       .sort({ updatedAt: 1 })
       .lean<{ _id: Types.ObjectId }[]>()
     return records.map((record) => record._id.toString())
   }
 
   /**
-   * Reserva hasta `until` el envío a Amoenus del pedido, si no está ya enviado ni reservado por
+   * Reserva hasta `until` ese envío a Amoenus del pedido, si no está ya enviado ni reservado por
    * otro. Devuelve el pedido reservado o null.
    */
-  async claimAmoenusSync(id: string, until: Date): Promise<Order | null> {
+  async claimAmoenusSync(
+    id: string,
+    target: AmoenusSyncTarget,
+    until: Date,
+  ): Promise<Order | null> {
     if (!isValidObjectId(id)) return null
     const record = await OrderModel.findOneAndUpdate(
       {
         _id: id,
-        'amoenus.origin': { $exists: true },
-        'amoenus.sync.status': { $ne: 'sent' },
+        ...HAS_SYNC_TARGET[target],
+        [`${target}.sync.status`]: { $ne: 'sent' },
         // Libre: null, o una reserva caducada de un envío que no terminó.
-        'amoenus.sendingUntil': { $not: { $gt: new Date() } },
+        [`${target}.sendingUntil`]: { $not: { $gt: new Date() } },
       },
-      { $set: { 'amoenus.sendingUntil': until } },
+      { $set: { [`${target}.sendingUntil`]: until } },
       { returnDocument: 'after' },
     ).lean<OrderRecord>()
     return record ? toOrder(record) : null
   }
 
   /** Guarda el resultado del envío y libera la reserva, si sigue siendo la de quien lo envió. */
-  async saveAmoenusSync(id: string, sync: AmoenusSync, claimedUntil: Date): Promise<void> {
+  async saveAmoenusSync(
+    id: string,
+    target: AmoenusSyncTarget,
+    sync: AmoenusSync,
+    claimedUntil: Date,
+  ): Promise<void> {
     await OrderModel.updateOne(
-      { _id: id, 'amoenus.sendingUntil': claimedUntil },
-      { $set: { 'amoenus.sync': toAmoenusSyncRecord(sync), 'amoenus.sendingUntil': null } },
+      { _id: id, [`${target}.sendingUntil`]: claimedUntil },
+      {
+        $set: {
+          [`${target}.sync`]: toAmoenusSyncRecord(sync),
+          [`${target}.sendingUntil`]: null,
+        },
+      },
       { runValidators: true },
     )
   }
@@ -285,6 +317,7 @@ export class OrderRepository {
                 },
               }
             : {}),
+          ...(change.amoenusSale ? { amoenusSale: { sync: null, sendingUntil: null } } : {}),
         },
         $push: { statusHistory: toEntryRecord(change.entry) },
       },

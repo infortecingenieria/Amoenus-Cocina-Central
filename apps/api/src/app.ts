@@ -14,17 +14,21 @@ import { DeliveryNoteRepository } from './modules/delivery-notes/delivery-note.r
 import { DeliveryNoteService } from './modules/delivery-notes/delivery-note.service'
 import { familyRoutes } from './modules/families/family.routes'
 import { healthRoutes } from './modules/health/health.routes'
+import { AmoenusCatalogService } from './modules/integrations/amoenus/amoenus-catalog.service'
+import { AmoenusSaleService } from './modules/integrations/amoenus/amoenus-sale.service'
 import { AmoenusSyncService } from './modules/integrations/amoenus/amoenus-sync.service'
 import {
   HttpAmoenusClient,
   type AmoenusClient,
 } from './modules/integrations/amoenus/amoenus.client'
 import {
+  amoenusCatalogRoutes,
   amoenusIntegrationRoutes,
   amoenusSyncRoutes,
 } from './modules/integrations/amoenus/amoenus.routes'
 import { OrderRepository } from './modules/orders/order.repository'
 import { orderRoutes } from './modules/orders/order.routes'
+import { SaleArticleRepository } from './modules/sale-articles/sale-article.repository'
 import { saleArticleRoutes } from './modules/sale-articles/sale-article.routes'
 import { authPlugin } from './plugins/auth'
 import { registerErrorHandler } from './plugins/error-handler'
@@ -49,6 +53,10 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** Envíos a Amoenus de los pedidos resueltos; `server.ts` reintenta los pendientes. */
     amoenusSync: AmoenusSyncService
+    /** Ventas del obrador como tickets de Amoenus; `server.ts` reintenta las pendientes. */
+    amoenusSales: AmoenusSaleService
+    /** Catálogo del obrador en Amoenus. */
+    amoenusCatalog: AmoenusCatalogService
   }
 }
 
@@ -87,6 +95,7 @@ const apiV1Routes: FastifyPluginAsyncZod<Pick<AppOptions, 'amoenusApiKey'>> = as
     protectedApp.addHook('onRequest', protectedApp.authenticate)
 
     await protectedApp.register(saleArticleRoutes, { prefix: '/sale-articles' })
+    await protectedApp.register(amoenusCatalogRoutes, { prefix: '/sale-articles' })
     await protectedApp.register(familyRoutes, { prefix: '/families' })
     await protectedApp.register(orderRoutes, { prefix: '/orders' })
     await protectedApp.register(amoenusSyncRoutes, { prefix: '/orders' })
@@ -112,15 +121,24 @@ export async function buildApp(options: AppOptions) {
   })
   if (options.docsEnabled) await registerSwagger(app)
 
+  const orders = new OrderRepository()
+  const deliveryNotes = new DeliveryNoteService(new DeliveryNoteRepository())
+  const amoenusClient =
+    options.amoenusClient ??
+    new HttpAmoenusClient({ baseUrl: options.amoenusApiUrl, apiKey: options.amoenusApiKey })
+  // Sin Amoenus configurado no se registran ventas ni catálogo (los tests inyectan su cliente).
+  const amoenusEnabled =
+    options.amoenusClient !== undefined ||
+    (options.amoenusApiUrl !== null && options.amoenusApiKey !== null)
+
+  app.decorate('amoenusSync', new AmoenusSyncService(orders, deliveryNotes, amoenusClient, app.log))
   app.decorate(
-    'amoenusSync',
-    new AmoenusSyncService(
-      new OrderRepository(),
-      new DeliveryNoteService(new DeliveryNoteRepository()),
-      options.amoenusClient ??
-        new HttpAmoenusClient({ baseUrl: options.amoenusApiUrl, apiKey: options.amoenusApiKey }),
-      app.log,
-    ),
+    'amoenusSales',
+    new AmoenusSaleService(orders, deliveryNotes, amoenusClient, app.log, amoenusEnabled),
+  )
+  app.decorate(
+    'amoenusCatalog',
+    new AmoenusCatalogService(new SaleArticleRepository(), amoenusClient, app.log, amoenusEnabled),
   )
 
   await app.register(healthRoutes)

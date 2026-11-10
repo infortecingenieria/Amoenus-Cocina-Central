@@ -104,8 +104,8 @@ histórico y los albaranes no cambien si luego se modifica el catálogo.
 Definido en `packages/shared/src/orders/order-status.ts`:
 
 ```
-pending ──► approved ──► in_preparation ──► delivered
-   │    └─► modified ──┘
+pending ──► approved ──┬──────────────────────► shipped ──► delivered
+   │    └─► modified ──┴─► in_preparation ───┘
    ├─► rejected   (obrador, con motivo)
    └─► cancelled  (tienda)
 ```
@@ -116,6 +116,9 @@ pending ──► approved ──► in_preparation ──► delivered
   de horneada). Al aprobar, las líneas que no se indican se sirven tal cual se pidieron.
 - Aprobar con cambios exige motivo, igual que rechazar; se guarda en `statusHistory` y la tienda lo
   ve destacado en la ficha del pedido. En la web, aprobar y rechazar siempre piden confirmación.
+- `shipped` («Enviado»): el obrador marca que el pedido aprobado ha salido hacia la tienda, con lo
+  aprobado. Es su venta y dispara el ticket en Amoenus (ver `docs/integracion-amoenus-central.md`).
+  Pide confirmación y no se puede deshacer. `in_preparation` y `delivered` aún no se usan.
 - Los cambios de estado se hacen con `findOneAndUpdate` filtrando por el estado de origen: si dos
   personas validan a la vez, la segunda recibe 409 `INVALID_STATE` en lugar de pisar el cambio.
 - Un artículo que ya aparece en algún pedido no se puede borrar (solo desactivar).

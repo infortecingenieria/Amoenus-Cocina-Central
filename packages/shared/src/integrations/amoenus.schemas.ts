@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
+import { isoDateSchema, isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { MAX_ORDER_LINE_QUANTITY } from '../orders/order.schemas'
 import { SALE_ARTICLE_CODE_PATTERN } from '../sale-articles/sale-article.schemas'
 
@@ -111,3 +111,69 @@ export const amoenusRejectionPayloadSchema = z.object({
   rejectedBy: z.string(),
 })
 export type AmoenusRejectionPayload = z.infer<typeof amoenusRejectionPayloadSchema>
+
+// --- Cocina Central como TPV del obrador -----------------------------------------------------
+
+/** Por dónde hizo la tienda el pedido: desde Amoenus App o desde Cocina Central. */
+export const AMOENUS_SALE_CHANNELS = ['amoenus', 'cocina_central'] as const
+
+/**
+ * Venta del obrador: un pedido aprobado, como ticket. Amoenus lo carga en el cliente y el local del
+ * obrador (los sabe por la clave de API) y sigue el flujo de cualquier TPV: ventas, mix y consumos
+ * según el escandallo. Sin IVA: es un intercambio interno entre el obrador y sus tiendas.
+ */
+export const amoenusSaleTicketPayloadSchema = z.object({
+  orderId: objectIdSchema,
+  /** «PED-2026-0001»: es el número del ticket, así que reenviarlo lo sustituye. */
+  orderNumber: z.string(),
+  /**
+   * «ALB-2026-0001»: el mismo número que el albarán del pedido de la tienda, así que une el ticket
+   * con la tienda. Es lo único que el ticket registra de ella.
+   */
+  deliveryNoteNumber: z.string(),
+  channel: z.enum(AMOENUS_SALE_CHANNELS),
+  /** Quién aprobó el pedido. */
+  operatorName: z.string(),
+  /** Día de la aprobación en hora de Madrid. */
+  businessDate: isoDateSchema,
+  /** «09:45», hora de Madrid. */
+  time: z.string(),
+  /** Lo servido: en formatos (bandejas, cajas…) y a precio de Cocina Central. */
+  lines: z.array(
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      quantity: z.number().int(),
+      unitPrice: z.number(),
+    }),
+  ),
+})
+export type AmoenusSaleTicketPayload = z.infer<typeof amoenusSaleTicketPayloadSchema>
+
+/**
+ * Catálogo del obrador: Amoenus da de alta o actualiza sus artículos de venta por código, sin tocar
+ * el escandallo.
+ */
+export const amoenusSaleArticlesPayloadSchema = z.object({
+  articles: z.array(
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      /** Nombre de la familia; null = sin familia. */
+      family: z.string().nullable(),
+      /** Precio por formato. */
+      price: z.number(),
+      active: z.boolean(),
+    }),
+  ),
+})
+export type AmoenusSaleArticlesPayload = z.infer<typeof amoenusSaleArticlesPayloadSchema>
+
+/** Resultado de enviar todo el catálogo a Amoenus desde el mantenimiento de artículos. */
+export const amoenusCatalogSyncResultSchema = z.object({
+  /** Artículos enviados (activos e inactivos). */
+  articles: z.number().int(),
+  /** null = recibido en Amoenus; si no, por qué ha fallado. */
+  error: z.string().nullable(),
+})
+export type AmoenusCatalogSyncResult = z.infer<typeof amoenusCatalogSyncResultSchema>

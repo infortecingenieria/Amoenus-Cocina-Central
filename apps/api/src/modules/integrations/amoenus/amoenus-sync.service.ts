@@ -15,7 +15,28 @@ import type { OrderResolvedListener } from '../../orders/order.service'
 import type { AmoenusClient } from './amoenus.client'
 
 /** Cuánto queda reservado un envío: de sobra para el timeout del cliente HTTP. */
-const SEND_LEASE_MS = 60_000
+export const SEND_LEASE_MS = 60_000
+
+/** Un intento de envío y su resultado, sumando los intentos anteriores. */
+export const attemptSend = async (
+  previous: AmoenusSync | null,
+  deliver: () => Promise<void>,
+): Promise<AmoenusSync> => {
+  const attempts = (previous?.attempts ?? 0) + 1
+  const now = new Date().toISOString()
+  try {
+    await deliver()
+    return { status: 'sent', attempts, lastError: null, lastAttemptAt: now, sentAt: now }
+  } catch (error) {
+    return {
+      status: 'failed',
+      attempts,
+      lastError: error instanceof Error ? error.message : String(error),
+      lastAttemptAt: now,
+      sentAt: null,
+    }
+  }
+}
 
 /**
  * Comunica a Amoenus cómo ha resuelto el obrador los pedidos vinculados (`amoenusEventFor`): de los
@@ -70,35 +91,21 @@ export class AmoenusSyncService implements OrderResolvedListener {
    */
   async send(orderId: string): Promise<AmoenusSync | null> {
     const claimedUntil = new Date(Date.now() + SEND_LEASE_MS)
-    const order = await this.orders.claimAmoenusSync(orderId, claimedUntil)
+    const order = await this.orders.claimAmoenusSync(orderId, 'amoenus', claimedUntil)
     const event = order && amoenusEventFor(order)
     // Sin evento la reserva se deja caducar: no hay nada que enviar.
     if (!order?.amoenus || !event) return null
 
-    const previous = order.amoenus.sync
-    const attempts = (previous?.attempts ?? 0) + 1
-    const now = new Date().toISOString()
-    let result: AmoenusSync
-    try {
-      await this.deliver(order, order.amoenus, event)
-      result = { status: 'sent', attempts, lastError: null, lastAttemptAt: now, sentAt: now }
-    } catch (error) {
-      result = {
-        status: 'failed',
-        attempts,
-        lastError: error instanceof Error ? error.message : String(error),
-        lastAttemptAt: now,
-        sentAt: null,
-      }
-    }
-    await this.orders.saveAmoenusSync(order.id, result, claimedUntil)
+    const link = order.amoenus
+    const result = await attemptSend(link.sync, () => this.deliver(order, link, event))
+    await this.orders.saveAmoenusSync(order.id, 'amoenus', result, claimedUntil)
     return result
   }
 
   /** Reintenta todos los envíos sin completar. Devuelve cuántos quedan enviados. */
   async retryUnsent(): Promise<number> {
     let sent = 0
-    for (const orderId of await this.orders.findIdsPendingAmoenusSync()) {
+    for (const orderId of await this.orders.findIdsPendingAmoenusSync('amoenus')) {
       if ((await this.send(orderId))?.status === 'sent') sent += 1
     }
     return sent

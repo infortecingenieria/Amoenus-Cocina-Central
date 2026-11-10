@@ -15,6 +15,8 @@ const STATUS_CLASSES: Record<OrderStatus, string> = {
     'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-500/60 dark:bg-teal-500/15 dark:text-teal-300',
   in_preparation:
     'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-500/60 dark:bg-sky-500/15 dark:text-sky-300',
+  shipped:
+    'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-500/60 dark:bg-indigo-500/15 dark:text-indigo-300',
   delivered: 'border-border bg-secondary text-secondary-foreground',
   rejected:
     'border-red-400 bg-red-50 text-red-700 dark:border-red-500/60 dark:bg-red-500/15 dark:text-red-300',

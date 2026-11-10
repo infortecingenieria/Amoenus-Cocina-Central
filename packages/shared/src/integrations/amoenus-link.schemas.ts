@@ -33,6 +33,13 @@ const linkBaseShape = {
   sync: amoenusSyncSchema.nullable(),
 }
 
+/**
+ * Venta del obrador registrada en Amoenus como ticket (Cocina Central es su TPV). Se crea cuando el
+ * obrador marca el pedido como enviado, si la integración está activa.
+ */
+export const amoenusSaleSchema = z.object({ sync: amoenusSyncSchema.nullable() })
+export type AmoenusSale = z.infer<typeof amoenusSaleSchema>
+
 export const amoenusOrderLinkSchema = z.discriminatedUnion('origin', [
   z.object({
     origin: z.literal('amoenus_order'),
@@ -52,10 +59,12 @@ export type AmoenusOrderLink = z.infer<typeof amoenusOrderLinkSchema>
 export const AMOENUS_SYNC_EVENTS = ['delivery_note', 'rejection', 'store_order'] as const
 export type AmoenusSyncEvent = (typeof AMOENUS_SYNC_EVENTS)[number]
 
+/** Aprobado y todo lo que viene después: el albarán sigue pendiente de enviar aunque avance. */
 const APPROVED_STATUSES: readonly OrderStatus[] = [
   'approved',
   'modified',
   'in_preparation',
+  'shipped',
   'delivered',
 ]
 

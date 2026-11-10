@@ -3,18 +3,20 @@ import { z } from 'zod'
 /**
  * Ciclo de vida de un pedido de tienda al obrador.
  *
- *   pending ──► approved ──► in_preparation ──► delivered
- *      │    └─► modified ──┘
+ *   pending ──► approved ──┬──────────────────────► shipped ──► delivered
+ *      │    └─► modified ──┴─► in_preparation ───┘
  *      ├─► rejected
  *      └─► cancelled
  *
  * `modified` = aprobado por el obrador con cantidades distintas a las solicitadas.
+ * `shipped` = el obrador ha enviado el pedido a la tienda: es su venta (ticket en Amoenus).
  */
 export const ORDER_STATUSES = [
   'pending',
   'approved',
   'modified',
   'in_preparation',
+  'shipped',
   'delivered',
   'rejected',
   'cancelled',
@@ -27,6 +29,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   approved: 'Aprobado',
   modified: 'Modificado por obrador',
   in_preparation: 'En preparación',
+  shipped: 'Enviado',
   delivered: 'Entregado',
   rejected: 'Rechazado',
   cancelled: 'Cancelado',
@@ -34,9 +37,10 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   pending: ['approved', 'modified', 'rejected', 'cancelled'],
-  approved: ['in_preparation'],
-  modified: ['in_preparation'],
-  in_preparation: ['delivered'],
+  approved: ['in_preparation', 'shipped'],
+  modified: ['in_preparation', 'shipped'],
+  in_preparation: ['shipped'],
+  shipped: ['delivered'],
   delivered: [],
   rejected: [],
   cancelled: [],

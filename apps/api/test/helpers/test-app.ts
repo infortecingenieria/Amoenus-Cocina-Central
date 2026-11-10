@@ -1,6 +1,8 @@
 import type {
   AmoenusDeliveryNotePayload,
   AmoenusRejectionPayload,
+  AmoenusSaleArticlesPayload,
+  AmoenusSaleTicketPayload,
   AmoenusStoreOrderPayload,
   UserRole,
 } from '@cocina-central/shared'
@@ -34,6 +36,8 @@ export class FakeAmoenusClient implements AmoenusClient {
   deliveryNotes: AmoenusDeliveryNotePayload[] = []
   rejections: AmoenusRejectionPayload[] = []
   storeOrders: AmoenusStoreOrderPayload[] = []
+  saleTickets: AmoenusSaleTicketPayload[] = []
+  saleArticles: AmoenusSaleArticlesPayload[] = []
   failing = false
 
   async sendDeliveryNote(payload: AmoenusDeliveryNotePayload): Promise<void> {
@@ -51,18 +55,50 @@ export class FakeAmoenusClient implements AmoenusClient {
     this.storeOrders.push(payload)
   }
 
+  /** Lo que tarda Amoenus en registrar un ticket (allí recalcula el día del local). */
+  saleTicketDelayMs = 0
+  /** Cuántos tickets llegaron a enviarse a la vez como mucho. */
+  maxSaleTicketsInFlight = 0
+  private saleTicketsInFlight = 0
+
+  async sendSaleTicket(payload: AmoenusSaleTicketPayload): Promise<void> {
+    this.saleTicketsInFlight += 1
+    this.maxSaleTicketsInFlight = Math.max(this.maxSaleTicketsInFlight, this.saleTicketsInFlight)
+    try {
+      if (this.saleTicketDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.saleTicketDelayMs))
+      }
+      if (this.failing) throw new Error('Amoenus no está disponible')
+      this.saleTickets.push(payload)
+    } finally {
+      this.saleTicketsInFlight -= 1
+    }
+  }
+
+  async sendSaleArticles(payload: AmoenusSaleArticlesPayload): Promise<void> {
+    if (this.failing) throw new Error('Amoenus no está disponible')
+    this.saleArticles.push(payload)
+  }
+
   reset(): void {
     this.deliveryNotes = []
     this.rejections = []
     this.storeOrders = []
+    this.saleTickets = []
+    this.saleArticles = []
     this.failing = false
+    this.saleTicketDelayMs = 0
+    this.maxSaleTicketsInFlight = 0
   }
 }
 
-/** Levanta la app contra un MongoDB en memoria, aislado por fichero de test. */
+/**
+ * Levanta la app contra un MongoDB en memoria, aislado por fichero de test. Con `amoenusClient:
+ * null`, como si Amoenus no estuviera configurado (`AMOENUS_API_URL` vacío).
+ */
 export async function createTestApp({
   amoenusClient = new FakeAmoenusClient(),
-}: { amoenusClient?: AmoenusClient } = {}): Promise<TestContext> {
+}: { amoenusClient?: AmoenusClient | null } = {}): Promise<TestContext> {
   const mongo = await MongoMemoryServer.create()
   await mongoose.connect(mongo.getUri())
   await mongoose.connection.syncIndexes()
@@ -76,7 +112,7 @@ export async function createTestApp({
     jwtExpiresIn: '1h',
     amoenusApiKey: TEST_AMOENUS_API_KEY,
     amoenusApiUrl: null,
-    amoenusClient,
+    amoenusClient: amoenusClient ?? undefined,
   })
   await app.ready()
 

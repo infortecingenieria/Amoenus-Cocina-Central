@@ -1,8 +1,8 @@
 # Integración con Amoenus Central
 
-> Estado: **pedidos Amoenus → Cocina Central y albarán/rechazo de vuelta implementados** (opción A,
-> AM-903). Tiendas y login siguen pendientes. Más abajo, lo que ya ofrece Amoenus Central (Portal
-> Corporativo) y las opciones que se valoraron.
+> Estado: **pedidos Amoenus → Cocina Central, albarán/rechazo de vuelta y ventas del obrador como
+> tickets implementados** (opción A, AM-903). Tiendas y login siguen pendientes. Más abajo, lo que ya
+> ofrece Amoenus Central (Portal Corporativo) y las opciones que se valoraron.
 
 ## Pedidos de Amoenus → solicitudes en Cocina Central
 
@@ -100,6 +100,122 @@ Cocina Central (OrderService.approve → AmoenusSyncService, evento store_order)
 - **Reenvíos**: se identifica por `orderCode`, así que reenviarlo no lo duplica (si aún no está
   recepcionado, solo sustituye el albarán). Mismos reintentos y «Reenviar a Amoenus» que el albarán.
 
+## Ventas del obrador → tickets en Amoenus
+
+Para el obrador, Cocina Central es su **TPV** (como Last.app para una tienda). Cada pedido que **envía a
+la tienda** es una venta: se envía a Amoenus como **ticket** del cliente obrador, que es un cliente propio
+con un único local. Allí sigue el flujo de venta de cualquier TPV: ventas del día, mix, franjas y
+**consumos**, que salen del escandallo de cada artículo.
+
+El disparador es el botón **«Marcar como enviado»**, que el obrador pulsa en la ficha del pedido o en su
+fila de Solicitudes cuando el pedido aprobado sale hacia la tienda. El pedido pasa a **«Enviado»**
+(`shipped`).
+
+```
+Cocina Central (OrderService.ship → AmoenusSaleService)
+  └─ POST {AMOENUS_API_URL}/sale_loader/cocina-central/tickets   X-Api-Key: <AMOENUS_API_KEY>
+       { orderId, orderNumber, deliveryNoteNumber, channel: amoenus|cocina_central,
+         operatorName, businessDate: "2026-11-06", time: "09:45",
+         lines: [{ code, name, quantity, unitPrice }] }
+  └─ POST {AMOENUS_API_URL}/sale_loader/cocina-central/articles
+       { articles: [{ code, name, family, price, active }] }
+  ◄─ 200 { success: true } · 400 { success: false, message }
+```
+
+### Qué se envía
+
+- **Ticket.**
+  - Se envía de **todo pedido marcado como enviado**, venga de Amoenus, de una tienda vinculada o de una
+    sin vincular. Solo se puede enviar un pedido aprobado (`approved` o `modified`), y una sola vez.
+  - **Si el obrador no pulsa «Marcar como enviado», no hay ticket.** En Solicitudes, el filtro «Aprobado» +
+    «Modificado por obrador» muestra los pedidos pendientes de enviar.
+  - No se puede deshacer: el diálogo de confirmación lo avisa.
+  - Lleva lo servido según el albarán: las líneas a 0 no van. La cantidad va en formatos (bandejas,
+    cajas…), así que **el escandallo de Amoenus tiene que estar hecho por formato**.
+  - Usa los precios de Cocina Central, **sin IVA**, porque es un intercambio interno entre el obrador y
+    sus tiendas.
+  - El número de ticket es el del pedido (`PED-…`), y el albarán (`ALB-…`) se guarda en el campo
+    `deliveryNoteNumber` del ticket.
+  - La fecha y la hora son las del envío, en hora de Madrid, y el operador es quien lo marca como enviado.
+    Así el consumo cae el día en que sale el género.
+  - Se envía lo aprobado: al marcar como enviado no se pueden cambiar las cantidades.
+- **Catálogo.**
+  - Cada alta, cambio o baja de un artículo de venta se envía al momento. Al borrar un artículo, en
+    Amoenus queda inactivo.
+  - Amoenus lo da de alta o lo actualiza por código **sin tocar el escandallo**.
+  - En «Artículos de venta», «Sincronizar con Amoenus» reenvía el catálogo entero. Sirve cuando algo no ha
+    llegado o se ha renombrado una familia, porque ese cambio no se envía solo.
+- **Estado del envío.**
+  - Va en `order.amoenusSale.sync`, independiente del albarán (`order.amoenus.sync`).
+  - Usa la misma reserva contra envíos duplicados y el mismo reintento cada 5 minutos.
+  - El obrador puede pulsar «Reenviar ticket» en la ficha (`POST /api/v1/orders/:id/amoenus-sale`).
+- **En segundo plano y de uno en uno.**
+  - «Marcar como enviado» responde sin esperar a Amoenus. Allí, registrar el ticket tarda, porque antes
+    de responder se recalculan las ventas, el mix, las franjas y los consumos del día del local.
+  - El pedido vuelve con `amoenusSale.sync: null`. La ficha muestra «Enviando a Amoenus…» y consulta el
+    pedido cada 2 s, durante un máximo de 60 s, hasta ver el resultado.
+  - `AmoenusSaleService.send` pone en cola todos los envíos (el inmediato, los reintentos y los reenvíos)
+    y nunca hay dos a la vez.
+  - El motivo de la cola: en Amoenus esos agregados se rehacen borrando y volviendo a crear el día, y dos
+    recálculos simultáneos del mismo día los duplicarían. Con `sale_loader` en cluster de pm2, eso no se
+    puede evitar allí.
+  - La cola es en memoria y supone **una sola instancia** de la API de Cocina Central. Si se escala, habrá
+    que llevarla a la base de datos.
+  - Aprobar y rechazar siguen esperando a Amoenus.
+- **Qué pedidos entran.**
+  - Los que se envían con la integración activa (`AMOENUS_API_URL`): la venta se marca en la misma
+    escritura que el envío. Un pedido aprobado antes de activarla genera su ticket cuando se envía.
+  - Si el obrador sigue sin Amoenus, nada de esto se activa.
+- **El lado de la tienda no cambia.** El albarán, el rechazo y el pedido de la tienda vinculada se siguen
+  enviando **al aprobar**, y se reintentan aunque el pedido ya esté enviado.
+
+### En Amoenus (rama `obradores-cocina-central`)
+
+- **`sale_loader/cocinaCentral`.**
+  - La clave identifica una fila de `cocinacentralsaleconfigs`:
+    `{ clientId, localId, apiKey, orderTypeCode, orderTypeName }`.
+  - El cliente y el local del ticket salen de esa fila, **nunca del cuerpo**.
+- **Carga del ticket.** Se hace con `Order.loadNewOrder`, que sustituye ese ticket sin borrar el resto
+  del día y encadena ventas, mix, franjas y consumos. Reenviarlo no lo duplica.
+- **Tipo de pedido.** El tipo de pedido (por defecto `CC` «Pedido de tienda») se da de alta solo. Sin él,
+  el ticket no sale en «Tickets».
+- **Artículos.** Se cargan siempre con `useTPVFamilies = false`, porque con `true` Amoenus borra y vuelve a
+  crear los artículos, y se pierden los escandallos.
+- **Alta (manual).**
+  1. Crear el cliente obrador y su local.
+  2. Dar de alta sus artículos de almacén y proveedores.
+  3. Elegir el método de coste.
+  4. Montar los escandallos por formato cuando lleguen los artículos.
+  5. Crear la fila de `cocinacentralsaleconfigs`, con la misma clave que `AMOENUS_API_KEY`.
+- **Aviso.** El local del obrador **solo puede recibir la venta de Cocina Central**. Las cargas de los
+  demás TPV (`/order/load`) borran el día entero del local antes de insertar, así que se llevarían estos
+  tickets. Otra fuente de venta tendría que ir en otro local.
+
+### Decidido por negocio
+
+- **Sin IVA:** el ticket va con `tax = 0` y `net = gross`.
+- **Sin forma de pago:** el ticket va siempre con `payments: []`, porque no hay cobro en caja.
+  - Las cifras de venta no cambian, porque salen del neto.
+  - El obrador no aparece en los informes que se calculan desde los pagos: venta por forma de pago, el
+    bloque de pagos del Resumen de venta, parte del Ranking y el arqueo.
+  - En «Tickets», la columna de forma de pago sale como «SIN DATOS».
+  - Si más adelante se quiere, hay que añadirla en `sale_loader/cocinaCentral/CocinaCentral.js` (`buildOrder`)
+    y darla de alta en el cliente: un código que no exista en `paymenttypes` rompe la pantalla «Tickets».
+- **De la tienda, el ticket solo registra el albarán:**
+  - Se guarda en `deliveryNoteNumber`, un campo nuevo de `Order` en `sale_loader`.
+  - Es el mismo `ALB-…` que el albarán del pedido de la tienda en Amoenus. Ese número y el `PED-…`
+    (`order` del ticket, `orderCode` del pedido de la tienda) enlazan el ticket con la tienda.
+  - De momento solo se guarda: no sale en ninguna pantalla ni en la API (`/v2/orders` proyecta una lista
+    fija de campos).
+
+### Pendiente de negocio
+
+- **Histórico:** al ponerlo en marcha, los pedidos aprobados antes que ya salieron físicamente aparecerán
+  como pendientes de enviar. Si se pulsa «Enviado» en ellos, su ticket llevará la fecha de ese día.
+  Falta decidir qué hacer con ellos: enviarlos igualmente, cargarlos con su fecha real o no registrarlos.
+- **Cambios en los artículos:** cambiar el código o el formato de un artículo ya usado deja mal su
+  escandallo en Amoenus. Hay un `TODO` en `SaleArticleService.update`.
+
 ## Qué existe hoy en Amoenus Central
 
 **API de integraciones** (`Portal-Corporativo/integrations`, guía en `integrations/API_V2.md`):
@@ -120,12 +236,13 @@ fábrica/obrador. `ConfigFactory` asocia un cliente con sus proveedores-obrador 
 
 ## Qué hay que sincronizar
 
-| Dato                      | Dirección                                         | Notas                                                |
-| ------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-| Tiendas                   | Amoenus → Cocina Central                          | `stores.amoenusLocalId` ↔ `locals._id`               |
-| Artículos de venta        | Amoenus → Cocina Central (o mantenimiento propio) | Sin vínculo: por definir si se decide la integración |
-| Usuarios / login          | ?                                                 | Ver opciones de autenticación                        |
-| Pedido aprobado / albarán | Cocina Central → Amoenus                          | Para que el stock de la tienda refleje la entrada    |
+| Dato                      | Dirección                                  | Notas                                             |
+| ------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| Tiendas                   | Amoenus → Cocina Central                   | `stores.amoenusLocalId` ↔ `locals._id`            |
+| Artículos de venta        | Cocina Central → Amoenus (cliente obrador) | Por código; Amoenus guarda el escandallo          |
+| Venta del obrador         | Cocina Central → Amoenus (cliente obrador) | Ticket por pedido enviado                         |
+| Usuarios / login          | ?                                          | Ver opciones de autenticación                     |
+| Pedido aprobado / albarán | Cocina Central → Amoenus                   | Para que el stock de la tienda refleje la entrada |
 
 ## Opciones
 
