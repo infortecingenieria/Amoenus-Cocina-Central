@@ -1,4 +1,5 @@
 import type {
+  AmoenusCatalogSyncResult,
   CreateSaleArticleInput,
   ListSaleArticlesParams,
   Paginated,
@@ -23,4 +24,8 @@ export const saleArticlesApi = {
     apiClient.patch<SaleArticle>(`${BASE_PATH}/${id}`, input),
 
   delete: (id: string) => apiClient.delete(`${BASE_PATH}/${id}`),
+
+  /** Envía a Amoenus todo el catálogo, activos e inactivos. */
+  syncToAmoenus: () =>
+    apiClient.post<AmoenusCatalogSyncResult>(`${BASE_PATH}/amoenus-sync`, undefined),
 }

@@ -53,3 +53,8 @@ export function useDeleteSaleArticle() {
     onSuccess: invalidate,
   })
 }
+
+/** No cambia nada aquí: no hay nada que invalidar. */
+export function useSyncSaleArticlesToAmoenus() {
+  return useMutation({ mutationFn: () => saleArticlesApi.syncToAmoenus() })
+}
