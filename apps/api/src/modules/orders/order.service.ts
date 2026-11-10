@@ -46,17 +46,24 @@ export interface NewOrderRequest {
 }
 
 /**
- * Lo que tiene que pasar cuando el obrador aprueba o rechaza un pedido, fuera de este módulo
- * (p. ej. comunicarlo a Amoenus). No debe lanzar: el pedido ya está resuelto.
+ * Lo que tiene que pasar cuando el obrador aprueba, rechaza o envía un pedido, fuera de este módulo
+ * (p. ej. comunicarlo a Amoenus). No debe lanzar: el cambio ya está guardado. Al aprobar y rechazar
+ * se espera a los listeners; al enviar se avisan en segundo plano.
  */
 export interface OrderResolvedListener {
   orderResolved(order: Order): Promise<void>
+}
+
+export interface OrderServiceOptions {
+  /** Al enviar, deja la venta pendiente de registrar en Amoenus (integración activa). */
+  amoenusSales?: boolean
 }
 
 /** Verbo de cada acción para los mensajes de error. */
 const ACTION_VERBS: Partial<Record<OrderStatus, string>> = {
   approved: 'aprobar',
   modified: 'aprobar',
+  shipped: 'marcar como enviado',
   rejected: 'rechazar',
   cancelled: 'cancelar',
 }
@@ -66,21 +73,24 @@ export class OrderService {
   private readonly repository: OrderRepository
   private readonly saleArticles: SaleArticleRepository
   private readonly deliveryNotes: DeliveryNoteService
-  private readonly resolvedListener: OrderResolvedListener
+  private readonly resolvedListeners: OrderResolvedListener[]
   private readonly users: UserRepository
+  private readonly amoenusSales: boolean
 
   constructor(
     repository: OrderRepository,
     saleArticles: SaleArticleRepository,
     deliveryNotes: DeliveryNoteService,
-    resolvedListener: OrderResolvedListener,
+    resolvedListeners: OrderResolvedListener[],
     users: UserRepository,
+    { amoenusSales = false }: OrderServiceOptions = {},
   ) {
     this.repository = repository
     this.saleArticles = saleArticles
     this.deliveryNotes = deliveryNotes
-    this.resolvedListener = resolvedListener
+    this.resolvedListeners = resolvedListeners
     this.users = users
+    this.amoenusSales = amoenusSales
   }
 
   /** La tienda solo ve sus pedidos; el obrador, todos. */
@@ -207,6 +217,21 @@ export class OrderService {
   }
 
   /**
+   * El obrador ha enviado el pedido a la tienda, con lo aprobado: es su venta. La venta para
+   * Amoenus queda pendiente en la misma escritura, así que no se pierde aunque el envío falle.
+   * No espera a Amoenus (registrar el ticket tarda: allí se recalcula el día del local); el pedido
+   * vuelve con la venta sin enviar (`sync: null`) y la ficha muestra cómo acaba.
+   */
+  async ship(id: string, user: AuthUser): Promise<Order> {
+    const order = await this.getById(id, user)
+    const shipped = await this.applyTransition(order, 'shipped', user, {
+      amoenusSale: this.amoenusSales,
+    })
+    this.notifyInBackground(shipped)
+    return shipped
+  }
+
+  /**
    * Solo la tienda que lo hizo y solo mientras el obrador no lo ha tramitado. Los que llegan de
    * Amoenus no: allí no se puede cancelar un pedido enviado y se quedaría esperando el albarán.
    */
@@ -222,10 +247,22 @@ export class OrderService {
 
   /** Avisa de la resolución y devuelve el pedido como haya quedado (p. ej. con el envío a Amoenus). */
   private async resolved(order: Order): Promise<Order> {
-    await this.resolvedListener.orderResolved(order)
+    for (const listener of this.resolvedListeners) await listener.orderResolved(order)
     const reloaded = await this.repository.findById(order.id)
     if (!reloaded) throw new NotFoundError('Pedido no encontrado')
     return reloaded
+  }
+
+  /**
+   * Como `resolved`, sin esperar: los listeners se avisan en segundo plano y en el mismo orden. No
+   * lanzan, y lo que no se envíe se reintenta.
+   */
+  private notifyInBackground(order: Order): void {
+    void (async () => {
+      for (const listener of this.resolvedListeners) {
+        await listener.orderResolved(order).catch(() => undefined)
+      }
+    })()
   }
 
   /** `undefined` = sin restricción (obrador). */
@@ -285,13 +322,20 @@ export class OrderService {
       lines,
       reason,
       deliveryNote,
-    }: { lines?: OrderLine[]; reason?: string; deliveryNote?: DeliveryNoteRef } = {},
+      amoenusSale,
+    }: {
+      lines?: OrderLine[]
+      reason?: string
+      deliveryNote?: DeliveryNoteRef
+      amoenusSale?: boolean
+    } = {},
   ): Promise<Order> {
     this.ensureCanTransition(order, to)
     const updated = await this.repository.transition(order.id, order.status, {
       status: to,
       lines,
       deliveryNote,
+      amoenusSale,
       entry: this.historyEntry(to, user, reason),
     })
     if (!updated) {

@@ -66,6 +66,15 @@ export class SaleArticleRepository {
     return { items: records.map(toSaleArticle), total }
   }
 
+  /** Todo el catálogo, activos e inactivos, por código. */
+  async findAll(): Promise<SaleArticle[]> {
+    const records = await SaleArticleModel.find()
+      .sort({ code: 1 })
+      .populate(POPULATE_FAMILY)
+      .lean<PopulatedSaleArticleRecord[]>()
+    return records.map(toSaleArticle)
+  }
+
   async findById(id: string): Promise<SaleArticle | null> {
     if (!isValidObjectId(id)) return null
     const record = await SaleArticleModel.findById(id)

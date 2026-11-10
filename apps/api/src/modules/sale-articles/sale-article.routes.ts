@@ -19,6 +19,7 @@ export const saleArticleRoutes: FastifyPluginAsyncZod = async (app) => {
       new SaleArticleRepository(),
       new FamilyRepository(),
       new OrderRepository(),
+      app.amoenusCatalog,
     ),
   )
 

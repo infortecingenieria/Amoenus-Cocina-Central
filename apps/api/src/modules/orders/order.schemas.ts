@@ -49,6 +49,13 @@ export const rejectOrderRoute = {
   response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
 }
 
+export const shipOrderRoute = {
+  tags,
+  summary: 'El obrador marca como enviado un pedido aprobado: es su venta (ticket en Amoenus)',
+  params: idParamsSchema,
+  response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
+}
+
 export const cancelOrderRoute = {
   tags,
   summary: 'La tienda cancela un pedido que aún no se ha tramitado',

@@ -1,4 +1,5 @@
 import {
+  amoenusCatalogSyncResultSchema,
   amoenusOrderSchema,
   apiErrorSchema,
   idParamsSchema,
@@ -26,4 +27,17 @@ export const resendToAmoenusRoute = {
   summary: 'Reenvía a Amoenus lo que esté pendiente del pedido (albarán, rechazo o pedido de tienda)',
   params: idParamsSchema,
   response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
+}
+
+export const resendSaleToAmoenusRoute = {
+  tags: ['orders'],
+  summary: 'Reenvía a Amoenus la venta del pedido como ticket del obrador',
+  params: idParamsSchema,
+  response: { 200: orderSchema, 404: apiErrorSchema, 409: apiErrorSchema },
+}
+
+export const syncCatalogToAmoenusRoute = {
+  tags: ['sale-articles'],
+  summary: 'Envía a Amoenus todo el catálogo de artículos de venta del obrador',
+  response: { 200: amoenusCatalogSyncResultSchema, 409: apiErrorSchema },
 }

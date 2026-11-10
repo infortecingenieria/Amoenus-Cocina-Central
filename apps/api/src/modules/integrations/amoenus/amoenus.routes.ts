@@ -12,7 +12,12 @@ import { OrderRepository } from '../../orders/order.repository'
 import { OrderService } from '../../orders/order.service'
 import { SaleArticleRepository } from '../../sale-articles/sale-article.repository'
 import { AmoenusIntegrationController, AmoenusSyncController } from './amoenus.controller'
-import { receiveAmoenusOrderRoute, resendToAmoenusRoute } from './amoenus.schemas'
+import {
+  receiveAmoenusOrderRoute,
+  resendSaleToAmoenusRoute,
+  resendToAmoenusRoute,
+  syncCatalogToAmoenusRoute,
+} from './amoenus.schemas'
 import { AmoenusIntegrationService } from './amoenus.service'
 
 export interface AmoenusRoutesOptions {
@@ -44,8 +49,9 @@ export const amoenusIntegrationRoutes: FastifyPluginAsyncZod<AmoenusRoutesOption
         orderRepository,
         saleArticles,
         new DeliveryNoteService(new DeliveryNoteRepository()),
-        app.amoenusSync,
+        [app.amoenusSync, app.amoenusSales],
         users,
+        { amoenusSales: app.amoenusSales.enabled },
       ),
       orderRepository,
       saleArticles,
@@ -65,11 +71,36 @@ export const amoenusIntegrationRoutes: FastifyPluginAsyncZod<AmoenusRoutesOption
 
 /** Rutas de la aplicación sobre los envíos a Amoenus. Van con sesión, bajo `/orders`. */
 export const amoenusSyncRoutes: FastifyPluginAsyncZod = async (app) => {
-  const controller = new AmoenusSyncController(app.amoenusSync)
+  const controller = new AmoenusSyncController(
+    app.amoenusSync,
+    app.amoenusSales,
+    app.amoenusCatalog,
+  )
+  const onlyKitchenAdmin = app.requireRole('kitchen_admin')
 
   app.post(
     '/:id/amoenus-sync',
-    { schema: resendToAmoenusRoute, preHandler: app.requireRole('kitchen_admin') },
+    { schema: resendToAmoenusRoute, preHandler: onlyKitchenAdmin },
     controller.resend,
+  )
+  app.post(
+    '/:id/amoenus-sale',
+    { schema: resendSaleToAmoenusRoute, preHandler: onlyKitchenAdmin },
+    controller.resendSale,
+  )
+}
+
+/** Envío del catálogo a Amoenus. Va con sesión, bajo `/sale-articles`. */
+export const amoenusCatalogRoutes: FastifyPluginAsyncZod = async (app) => {
+  const controller = new AmoenusSyncController(
+    app.amoenusSync,
+    app.amoenusSales,
+    app.amoenusCatalog,
+  )
+
+  app.post(
+    '/amoenus-sync',
+    { schema: syncCatalogToAmoenusRoute, preHandler: app.requireRole('kitchen_admin') },
+    controller.syncCatalog,
   )
 }
