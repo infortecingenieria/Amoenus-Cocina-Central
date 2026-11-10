@@ -31,9 +31,16 @@ export const ordersApi = {
   reject: (id: string, input: RejectOrderInput) =>
     apiClient.post<Order>(`${BASE_PATH}/${id}/reject`, input),
 
+  /** El obrador ha enviado el pedido a la tienda: es su venta (ticket en Amoenus). */
+  ship: (id: string) => apiClient.post<Order>(`${BASE_PATH}/${id}/ship`, undefined),
+
   cancel: (id: string) => apiClient.post<Order>(`${BASE_PATH}/${id}/cancel`, undefined),
 
   /** Reenvía a Amoenus lo que esté pendiente del pedido (albarán, rechazo o pedido de tienda). */
   resendToAmoenus: (id: string) =>
     apiClient.post<Order>(`${BASE_PATH}/${id}/amoenus-sync`, undefined),
+
+  /** Reenvía a Amoenus la venta del pedido como ticket del obrador. */
+  resendSaleToAmoenus: (id: string) =>
+    apiClient.post<Order>(`${BASE_PATH}/${id}/amoenus-sale`, undefined),
 }

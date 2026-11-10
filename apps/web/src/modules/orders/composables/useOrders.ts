@@ -25,10 +25,27 @@ export function useOrderList(params: MaybeRefOrGetter<ListOrdersParams>) {
   })
 }
 
+/** Cuánto se espera, como mucho, a que el ticket del obrador llegue a Amoenus tras enviar el pedido. */
+const SALE_SENDING_WINDOW_MS = 60_000
+const SALE_POLL_INTERVAL_MS = 2_000
+
+/**
+ * El ticket se está enviando a Amoenus: el pedido se acaba de marcar como enviado y la venta aún
+ * no tiene resultado (la API la envía en segundo plano). `now` permite evaluarlo con la hora de la
+ * última consulta.
+ */
+export function isSendingSale(order: Order | undefined, now = Date.now()): boolean {
+  if (!order?.amoenusSale || order.amoenusSale.sync !== null) return false
+  const shipment = [...order.statusHistory].reverse().find((entry) => entry.status === 'shipped')
+  return !!shipment && now - new Date(shipment.at).getTime() < SALE_SENDING_WINDOW_MS
+}
+
 export function useOrder(id: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => orderKeys.detail(toValue(id))),
     queryFn: ({ signal }) => ordersApi.getById(toValue(id), signal),
+    // Mientras se envía el ticket, se consulta hasta ver cómo acaba (enviado o con error).
+    refetchInterval: (query) => (isSendingSale(query.state.data) ? SALE_POLL_INTERVAL_MS : false),
   })
 }
 
@@ -70,6 +87,14 @@ export function useRejectOrder() {
   })
 }
 
+export function useShipOrder() {
+  const onSaved = useOnOrderSaved()
+  return useMutation({
+    mutationFn: (id: string) => ordersApi.ship(id),
+    onSuccess: onSaved,
+  })
+}
+
 export function useCancelOrder() {
   const onSaved = useOnOrderSaved()
   return useMutation({
@@ -82,6 +107,14 @@ export function useResendToAmoenus() {
   const onSaved = useOnOrderSaved()
   return useMutation({
     mutationFn: (id: string) => ordersApi.resendToAmoenus(id),
+    onSuccess: onSaved,
+  })
+}
+
+export function useResendSaleToAmoenus() {
+  const onSaved = useOnOrderSaved()
+  return useMutation({
+    mutationFn: (id: string) => ordersApi.resendSaleToAmoenus(id),
     onSuccess: onSaved,
   })
 }

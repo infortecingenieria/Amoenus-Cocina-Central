@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  canTransition,
   type ListOrdersParams,
   type OrderSort,
   type OrderStatus,
@@ -15,6 +16,7 @@ import {
   PencilIcon,
   PlusIcon,
   SearchIcon,
+  TruckIcon,
 } from '@lucide/vue'
 import { refDebounced } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
@@ -38,6 +40,7 @@ import { useSessionStore } from '@/stores/session'
 import ApproveOrderDialog from '../components/ApproveOrderDialog.vue'
 import OrderStatusBadge from '../components/OrderStatusBadge.vue'
 import OrderStatusFilter from '../components/OrderStatusFilter.vue'
+import ShipOrderDialog from '../components/ShipOrderDialog.vue'
 import { useOrderList } from '../composables/useOrders'
 
 const PAGE_SIZE = 20
@@ -93,6 +96,15 @@ const approveOpen = ref(false)
 function openApprove(order: OrderSummary) {
   approvingOrder.value = order
   approveOpen.value = true
+}
+
+// Marcar como enviado desde la fila (con confirmación), una vez aprobado.
+const shippingOrder = ref<OrderSummary | null>(null)
+const shipOpen = ref(false)
+
+function openShip(order: OrderSummary) {
+  shippingOrder.value = order
+  shipOpen.value = true
 }
 </script>
 
@@ -218,12 +230,25 @@ function openApprove(order: OrderSummary) {
                     </RouterLink>
                   </Button>
                 </template>
-                <Button v-else size="sm" variant="outline" as-child>
-                  <RouterLink :to="{ name: 'request-detail', params: { id: order.id } }">
-                    <EyeIcon />
-                    Ver
-                  </RouterLink>
-                </Button>
+                <template v-else>
+                  <Button
+                    v-if="isKitchenAdmin && canTransition(order.status, 'shipped')"
+                    size="sm"
+                    variant="outline"
+                    class="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary"
+                    title="El pedido ha salido hacia la tienda"
+                    @click="openShip(order)"
+                  >
+                    <TruckIcon />
+                    Enviar
+                  </Button>
+                  <Button size="sm" variant="outline" as-child>
+                    <RouterLink :to="{ name: 'request-detail', params: { id: order.id } }">
+                      <EyeIcon />
+                      Ver
+                    </RouterLink>
+                  </Button>
+                </template>
               </div>
             </TableCell>
           </TableRow>
@@ -254,5 +279,6 @@ function openApprove(order: OrderSummary) {
     </footer>
 
     <ApproveOrderDialog v-if="approvingOrder" v-model:open="approveOpen" :order="approvingOrder" />
+    <ShipOrderDialog v-if="shippingOrder" v-model:open="shipOpen" :order="shippingOrder" />
   </section>
 </template>
