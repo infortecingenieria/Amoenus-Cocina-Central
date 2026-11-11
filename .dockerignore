@@ -1,0 +1,19 @@
+# Contexto de las imágenes de producción (se construyen desde la raíz del monorepo).
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/.eslintcache
+
+# Secretos y entornos locales: nunca dentro de la imagen (las variables se pasan al arrancar).
+**/.env
+**/.env.*
+
+.git
+.vscode
+.idea
+.claude
+graphify-out
+.codebase-memory
+docs
+**/*.log
