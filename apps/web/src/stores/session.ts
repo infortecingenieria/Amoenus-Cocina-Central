@@ -3,6 +3,7 @@ import { StorageSerializers, useLocalStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed } from 'vue'
 
+import { getTokenExpiry } from '@/lib/jwt'
 import { queryClient } from '@/lib/query-client'
 import { authApi } from '@/modules/auth/api/auth.api'
 
@@ -14,7 +15,8 @@ const USER_KEY = 'cocina-central:user'
 /**
  * Sesión del usuario: token JWT y datos del usuario, guardados en localStorage para mantener la
  * sesión al recargar. La API valida el token en cada petición; si caduca responde 401 y
- * `main.ts` cierra la sesión.
+ * `main.ts` cierra la sesión. Además, el cliente lee el `exp` del token para cerrarla al caducar
+ * aunque no haya peticiones (temporizador en `main.ts`, guarda del router).
  */
 export const useSessionStore = defineStore('session', () => {
   const token = useLocalStorage<string | null>(TOKEN_KEY, null)
@@ -23,6 +25,12 @@ export const useSessionStore = defineStore('session', () => {
   })
 
   const isAuthenticated = computed(() => token.value !== null && storedUser.value !== null)
+
+  /** Caducidad del token (ms desde epoch), o null si no hay token o no es legible. */
+  const expiresAt = computed(() => getTokenExpiry(token.value))
+
+  /** Si el token ha caducado (uno ilegible cuenta como caducado). Función: depende de la hora. */
+  const isExpired = (): boolean => expiresAt.value === null || expiresAt.value <= Date.now()
 
   const user = computed(() => storedUser.value)
   const roleLabel = computed(() => (storedUser.value ? USER_ROLE_LABELS[storedUser.value.role] : ''))
@@ -55,6 +63,8 @@ export const useSessionStore = defineStore('session', () => {
     token,
     user,
     isAuthenticated,
+    expiresAt,
+    isExpired,
     roleLabel,
     isKitchenAdmin,
     hasRole,

@@ -101,6 +101,10 @@ y con autenticación.
    La API queda en el puerto 3000.
 3. Pon delante el proxy con HTTPS del servidor apuntando a ese puerto.
 
+- La web (estáticos de `apps/web/dist`) se publica en Netlify. El router usa rutas sin `#`, así que
+  `apps/web/public/_redirects` (copiado a `dist/` en el build) sirve `index.html` en cualquier ruta:
+  sin él, recargar en `/solicitudes` o abrir `/login` da el 404 de Netlify. `CORS_ORIGINS` de la API
+  debe incluir el dominio de la web.
 - Una sola instancia de la API: la cola de tickets a Amoenus está en memoria (no escalar con réplicas).
 - No ejecutes `pnpm db:seed` contra producción: los usuarios reales se dan de alta aparte.
 

@@ -1,0 +1,3 @@
+# Fallback SPA para Netlify: cualquier ruta del router (/solicitudes, /login…) sirve index.html.
+# Los ficheros que existen en dist (assets, favicon) se siguen sirviendo tal cual.
+/*  /index.html  200

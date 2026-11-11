@@ -78,6 +78,9 @@ const router = createRouter({
 router.beforeEach((to) => {
   const session = useSessionStore()
 
+  // Token caducado (p. ej. al recargar tras horas sin uso): se cierra la sesión antes de entrar.
+  if (session.isAuthenticated && session.isExpired()) session.logout()
+
   if (to.meta.public) {
     // Con sesión iniciada no tiene sentido volver al login.
     return session.isAuthenticated ? { name: 'home' } : true
