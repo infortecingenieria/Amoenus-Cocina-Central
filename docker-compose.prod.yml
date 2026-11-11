@@ -1,0 +1,21 @@
+# Producción: solo la API (la web se despliega aparte como estáticos de apps/web/dist).
+# MongoDB va aparte (gestionado, con autenticación).
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Las variables de la API (MONGODB_URI, JWT_SECRET, CORS_ORIGINS, AMOENUS_API_URL, AMOENUS_API_KEY…)
+# se leen de apps/api/.env.production, que no se versiona: plantilla en apps/api/.env.example.
+name: cocina-central
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: infortec/cocina-central-backend:v1.0.0
+    container_name: cocina-central-api
+    restart: unless-stopped
+    env_file: apps/api/.env.production
+    environment:
+      NODE_ENV: production
+    # Una sola instancia: la cola de tickets a Amoenus está en memoria (no escalar con réplicas).
+    ports:
+      - '3000:3000'
