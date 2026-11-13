@@ -17,6 +17,9 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
 
 - Hecho: monorepo, layout/menú según los mockups, CRUD completo de
   artículos de venta y de sus familias (API + web + tests; familia opcional, filtro por familia).
+  Código de artículo alfanumérico en mayúsculas (máx. 20), igual al código de proveedor en Amoenus.
+  `pnpm db:import-articles` da de alta (solo crea, idempotente) los artículos de almacén de
+  La Empanadera (`apps/api/src/scripts/data/la-empanadera-articles.ts`).
 - Login propio con usuario y contraseña (colección `users`, JWT en `Authorization: Bearer`). Toda la
   API salvo `/auth/login` y `/health` exige sesión; las escrituras usan `app.requireRole(...)`.
   `pnpm db:seed` crea los usuarios `admin` y `tienda`, y las tiendas de La Empanadera vinculadas a

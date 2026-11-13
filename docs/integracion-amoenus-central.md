@@ -20,7 +20,7 @@ Amoenus (warehouses, OrderSupplier.createOrder)
 - **Autenticación**: clave de API compartida (`AMOENUS_API_KEY` en el `.env` de la API, mínimo 32
   caracteres), no sesión JWT. Sin la variable, la ruta responde siempre 401.
 - **Artículos**: se casan por código. En Amoenus, el artículo de stock lleva como código del proveedor
-  (`suppliers[].code`) el código de 5 dígitos de Cocina Central; `quantity` son formatos (bandejas,
+  (`suppliers[].code`) el código alfanumérico de Cocina Central (p. ej. «E001»); `quantity` son formatos (bandejas,
   cajas…), su unidad de servicio. El precio y el formato salen del catálogo de Cocina Central.
 - **Tienda**: de momento `storeName` = nombre del local en Amoenus. El pedido guarda además
   `amoenus: { origin: 'amoenus_order', externalOrderId, clientId, localId, sync }`, que el módulo

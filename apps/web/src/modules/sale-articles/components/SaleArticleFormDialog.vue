@@ -4,6 +4,7 @@ import {
   NO_FAMILY,
   PACKAGE_FORMAT_LABELS,
   PACKAGE_FORMATS,
+  SALE_ARTICLE_CODE_MAX_LENGTH,
   type PackageFormat,
   type SaleArticle,
 } from '@cocina-central/shared'
@@ -145,9 +146,9 @@ async function submit() {
                 id="code"
                 v-model="form.code"
                 :aria-invalid="!!errors.code"
-                inputmode="numeric"
-                maxlength="5"
-                placeholder="00001"
+                :maxlength="SALE_ARTICLE_CODE_MAX_LENGTH"
+                placeholder="E001"
+                class="uppercase"
                 autocomplete="off"
               />
               <FieldError :errors="errors.code" />

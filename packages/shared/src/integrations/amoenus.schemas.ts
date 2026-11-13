@@ -2,17 +2,14 @@ import { z } from 'zod'
 
 import { isoDateSchema, isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { MAX_ORDER_LINE_QUANTITY } from '../orders/order.schemas'
-import { SALE_ARTICLE_CODE_PATTERN } from '../sale-articles/sale-article.schemas'
+import { saleArticleCodeSchema } from '../sale-articles/sale-article.schemas'
 
 /** Cabecera con la clave de API que identifica a Amoenus Central en las rutas de integración. */
 export const INTEGRATION_API_KEY_HEADER = 'x-api-key'
 
 /** Línea de un pedido de Amoenus: el artículo se identifica por su código en Cocina Central. */
 export const amoenusOrderLineSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .regex(SALE_ARTICLE_CODE_PATTERN, 'El código debe tener 5 dígitos numéricos'),
+  code: saleArticleCodeSchema,
   /** Número de formatos pedidos (bandejas, cajas…): la unidad de servicio del proveedor en Amoenus. */
   quantity: z
     .number()

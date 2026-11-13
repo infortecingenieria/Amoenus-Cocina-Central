@@ -4,12 +4,28 @@ import { isoDateTimeSchema, objectIdSchema } from '../common/primitives'
 import { paginatedSchema, paginationQuerySchema } from '../common/pagination'
 import { packageFormatSchema } from './package-format'
 
-/** Código de artículo: exactamente 5 dígitos, conservando los ceros a la izquierda («00123»). */
-export const SALE_ARTICLE_CODE_PATTERN = /^\d{5}$/
+export const SALE_ARTICLE_CODE_MAX_LENGTH = 20
+
+/**
+ * Código de artículo: alfanumérico (letras y dígitos, sin espacios ni símbolos), en mayúsculas y
+ * de hasta `SALE_ARTICLE_CODE_MAX_LENGTH` caracteres. Es el código de proveedor del artículo en
+ * Amoenus («E001», «CH001»); los numéricos («00123», con sus ceros a la izquierda) siguen valiendo.
+ */
+export const SALE_ARTICLE_CODE_PATTERN = new RegExp(`^[A-Z0-9]{1,${SALE_ARTICLE_CODE_MAX_LENGTH}}$`)
+
+/** Se pasa a mayúsculas antes de validar: «e001» y «E001» son el mismo artículo. */
+export const saleArticleCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(
+    SALE_ARTICLE_CODE_PATTERN,
+    `El código solo admite letras y números (máx. ${SALE_ARTICLE_CODE_MAX_LENGTH})`,
+  )
 
 /** Campos editables de un artículo de venta del obrador. */
 const saleArticleFields = {
-  code: z.string().trim().regex(SALE_ARTICLE_CODE_PATTERN, 'El código debe tener 5 dígitos numéricos'),
+  code: saleArticleCodeSchema,
   name: z.string().trim().min(1, 'El nombre es obligatorio').max(120),
   format: packageFormatSchema,
   unitsPerFormat: z.number().int().positive('Debe ser mayor que 0'),
