@@ -9,6 +9,7 @@
     "build": "tsdown",
     "start": "node dist/server.mjs",
     "db:seed": "tsx src/scripts/seed.ts",
+    "db:import-articles": "tsx src/scripts/import-articles.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --fix --cache",
     "test": "vitest run"

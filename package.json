@@ -16,7 +16,8 @@
     "web:dev": "pnpm --filter @cocina-central/web dev",
     "db:up": "docker compose up -d mongo",
     "db:down": "docker compose down",
-    "db:seed": "pnpm --filter @cocina-central/api db:seed"
+    "db:seed": "pnpm --filter @cocina-central/api db:seed",
+    "db:import-articles": "pnpm --filter @cocina-central/api db:import-articles"
   },
   "devDependencies": {
     "npm-run-all2": "^9.0.3",
