@@ -77,7 +77,7 @@ families (familias de artículos de venta)             ✅ implementado
   No se puede borrar si tiene artículos asignados.
 
 sale_articles (artículos de venta del obrador)        ✅ implementado
-  _id, code (único, 5 dígitos: "00123"), name, familyId? (→ families), format (box|tray|bag|unit),
+  _id, code (único, alfanumérico en mayúsculas, máx. 20: "E001", "00123"), name, familyId? (→ families), format (box|tray|bag|unit),
   unitsPerFormat, price, active, createdAt, updatedAt     ← sin imagen por ahora
 
 orders (pedidos tienda → obrador)                    ✅ implementado

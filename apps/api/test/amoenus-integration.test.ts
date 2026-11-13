@@ -150,6 +150,22 @@ describe('API /integrations/amoenus', () => {
       expect(stored.json<Order>().amoenus?.origin).toBe('amoenus_order')
     })
 
+    it('casa códigos alfanuméricos sin distinguir mayúsculas', async () => {
+      const empanada = await createArticle({
+        code: 'E001',
+        name: 'EMPANADA DE QUESO',
+        format: 'bag',
+        unitsPerFormat: 14,
+        price: 0,
+      })
+
+      const response = await send(amoenusOrder({ lines: [{ code: 'e001', quantity: 2 }] }))
+      expect(response.statusCode).toBe(201)
+      expect(response.json<Order>().lines).toEqual([
+        expect.objectContaining({ saleArticleId: empanada.id, code: 'E001', requestedQty: 2 }),
+      ])
+    })
+
     it('comparte la numeración con los pedidos hechos desde la aplicación', async () => {
       await send(amoenusOrder())
       const second = await send(amoenusOrder({ externalOrderId: '6ad900000000000000000002' }))
@@ -197,7 +213,16 @@ describe('API /integrations/amoenus', () => {
     it.each([
       ['sin líneas', { lines: [] }],
       ['con cantidades decimales', { lines: [{ code: '10001', quantity: 1.5 }] }],
-      ['con un código que no es de 5 dígitos', { lines: [{ code: '123', quantity: 1 }] }],
+      ['con un código no alfanumérico', { lines: [{ code: 'E-001', quantity: 1 }] }],
+      [
+        'con artículos repetidos aunque cambien las mayúsculas',
+        {
+          lines: [
+            { code: 'E001', quantity: 1 },
+            { code: 'e001', quantity: 2 },
+          ],
+        },
+      ],
       [
         'con artículos repetidos',
         {

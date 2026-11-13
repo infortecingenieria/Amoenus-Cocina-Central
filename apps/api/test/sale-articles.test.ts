@@ -140,18 +140,35 @@ describe('API /sale-articles', () => {
     )
   })
 
-  it('exige un código de exactamente 5 dígitos y conserva los ceros a la izquierda', async () => {
-    for (const code of ['1234', '123456', '12a45', 'BAR-0']) {
+  it('exige un código alfanumérico de hasta 20 caracteres', async () => {
+    for (const code of ['', 'BAR-0', 'E 001', 'CAÑA1', 'A'.repeat(21)]) {
       const response = await create({ ...barra, code })
       expect(response.statusCode, code).toBe(400)
       expect(response.json<ApiErrorBody>().details).toEqual([
         expect.objectContaining({ path: '/code' }),
       ])
     }
+  })
 
-    const response = await create({ ...barra, code: '00123' })
-    expect(response.statusCode).toBe(201)
-    expect(response.json<SaleArticle>().code).toBe('00123')
+  it('acepta códigos alfanuméricos en mayúsculas y conserva los ceros a la izquierda', async () => {
+    const cases: [code: string, expected: string][] = [
+      ['00123', '00123'],
+      [' ch001 ', 'CH001'],
+      ['A'.repeat(20), 'A'.repeat(20)],
+    ]
+    for (const [index, [code, expected]] of cases.entries()) {
+      const response = await create({ ...barra, name: `Artículo ${index}`, code })
+      expect(response.statusCode, code).toBe(201)
+      expect(response.json<SaleArticle>().code).toBe(expected)
+    }
+  })
+
+  it('no distingue mayúsculas al comprobar códigos duplicados', async () => {
+    await create({ ...barra, code: 'E001' })
+    const response = await create({ ...barra, name: 'Otra barra', code: 'e001' })
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json<ApiErrorBody>().code).toBe('CONFLICT')
   })
 
   it('no permite códigos duplicados', async () => {
