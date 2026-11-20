@@ -46,9 +46,7 @@ export class DeliveryNoteService {
     const existing = await this.repository.findByOrderId(order.id)
     if (existing) return existing
 
-    const approval = order.statusHistory.findLast(
-      (entry) => entry.status === 'approved' || entry.status === 'modified',
-    )
+    const approval = order.statusHistory.findLast((entry) => entry.status === 'approved')
     try {
       return await this.repository.create({
         id: order.deliveryNote.id,
