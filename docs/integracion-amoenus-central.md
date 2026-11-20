@@ -39,7 +39,8 @@ Amoenus (warehouses, OrderSupplier.createOrder)
 ## Albarán y rechazo de Cocina Central → Amoenus
 
 Al **aprobar** un pedido (con o sin cambios) se genera su albarán (`delivery_notes`, número
-`ALB-AAAA-NNNN`, uno por pedido) con lo pedido y lo servido (`confirmedQty`). Si el pedido viene de
+`ALB-AAAA-NNNN`, uno por pedido) con lo pedido y lo servido (`confirmedQty`). Los artículos que añade
+el obrador al aprobar van con `requestedQty: 0`. Si el pedido viene de
 Amoenus, se le envía en el momento; al **rechazarlo**, se envía el rechazo con el motivo. Funciona
 como el albarán de Conway en Amoenus, pero sin cron: lo empuja Cocina Central.
 
@@ -73,7 +74,11 @@ Cocina Central (OrderService.approve / reject → OrderResolvedListener = Amoenu
   `quantityServiceUnit`, precio de Cocina Central) enlazado al pedido por `globalDeliveryNoteId`, y el
   pedido se autocorrige con lo servido (las líneas a 0 se quitan). En Gestión de pedidos sale el botón
   del albarán (en rojo si hay cambios) en lugar de «Recepcionar pedido», y la entrada se crea a mano
-  desde él. Un rechazo marca el pedido `rejected` con `cocinaCentralRejection` (motivo, fecha, usuario).
+  desde él. En el albarán, las cantidades recibidas distintas de las pedidas y los artículos que no
+  están dados de alta en Amoenus (sin artículo de stock con ese código de proveedor) salen en rojo.
+  Un artículo desconocido no impide guardar el pedido ni el albarán: queda en el albarán con
+  `invalidItemName` y fuera de las líneas del pedido. Un rechazo marca el pedido `rejected` con
+  `cocinaCentralRejection` (motivo, fecha, usuario).
 
 ## Pedidos de tienda en Cocina Central → pedido y albarán en Amoenus
 
@@ -126,9 +131,9 @@ Cocina Central (OrderService.ship → AmoenusSaleService)
 
 - **Ticket.**
   - Se envía de **todo pedido marcado como enviado**, venga de Amoenus, de una tienda vinculada o de una
-    sin vincular. Solo se puede enviar un pedido aprobado (`approved` o `modified`), y una sola vez.
-  - **Si el obrador no pulsa «Marcar como enviado», no hay ticket.** En Solicitudes, el filtro «Aprobado» +
-    «Modificado por obrador» muestra los pedidos pendientes de enviar.
+    sin vincular. Solo se puede enviar un pedido aprobado (`approved`), y una sola vez.
+  - **Si el obrador no pulsa «Marcar como enviado», no hay ticket.** En Solicitudes, el filtro «Aprobado»
+    muestra los pedidos pendientes de enviar.
   - No se puede deshacer: el diálogo de confirmación lo avisa.
   - Lleva lo servido según el albarán: las líneas a 0 no van. La cantidad va en formatos (bandejas,
     cajas…), así que **el escandallo de Amoenus tiene que estar hecho por formato**.

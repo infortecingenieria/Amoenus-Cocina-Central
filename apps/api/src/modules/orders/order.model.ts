@@ -80,7 +80,8 @@ const orderLineSchema = new Schema<OrderLineRecord>(
     format: { type: String, enum: PACKAGE_FORMATS, required: true },
     unitsPerFormat: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
-    requestedQty: { type: Number, required: true, min: 1 },
+    // 0 = artículo añadido por el obrador al aprobar.
+    requestedQty: { type: Number, required: true, min: 0 },
     confirmedQty: { type: Number, default: null, min: 0 },
     lotNumber: { type: String, default: null },
     expiryDate: { type: String, default: null },

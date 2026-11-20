@@ -12,7 +12,7 @@ export const deliveryNoteLineSchema = z.object({
   unitsPerFormat: z.number().int(),
   /** Precio por formato. */
   unitPrice: z.number(),
-  /** Formatos pedidos por la tienda. */
+  /** Formatos pedidos por la tienda (0 = artículo añadido por el obrador al aprobar). */
   requestedQty: z.number().int(),
   /** Formatos que sirve el obrador (0 = no se sirve). */
   deliveredQty: z.number().int(),

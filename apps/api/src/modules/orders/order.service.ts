@@ -3,7 +3,7 @@ import {
   isFromAmoenus,
   ORDER_STATUS_LABELS,
   type AmoenusOrderLink,
-  type ApproveOrderInput,
+  type ApproveOrderData,
   type AuthUser,
   type CreateOrderData,
   type DeliveryNoteRef,
@@ -59,10 +59,26 @@ export interface OrderServiceOptions {
   amoenusSales?: boolean
 }
 
+type ApproveLine = NonNullable<ApproveOrderData['lines']>[number]
+
+/**
+ * La línea con lo que sirve el obrador: lo indicado o, si no se indica, lo pedido. Lo que no se
+ * sirve no lleva lote ni caducidad.
+ */
+const withServed = (line: OrderLine, input: ApproveLine | undefined): OrderLine => {
+  const confirmedQty = input?.confirmedQty ?? line.requestedQty
+  const served = confirmedQty > 0
+  return {
+    ...line,
+    confirmedQty,
+    lotNumber: served ? (input?.lotNumber ?? null) : null,
+    expiryDate: served ? (input?.expiryDate ?? null) : null,
+  }
+}
+
 /** Verbo de cada acción para los mensajes de error. */
 const ACTION_VERBS: Partial<Record<OrderStatus, string>> = {
   approved: 'aprobar',
-  modified: 'aprobar',
   shipped: 'marcar como enviado',
   rejected: 'rechazar',
   cancelled: 'cancelar',
@@ -133,13 +149,7 @@ export class OrderService {
    * Alta de un pedido pendiente para una tienda. La usan la propia tienda y las integraciones
    * (Amoenus), para que todos los pedidos compartan validación de artículos y numeración.
    */
-  async createFor({
-    storeName,
-    notes,
-    lines,
-    author,
-    amoenus,
-  }: NewOrderRequest): Promise<Order> {
+  async createFor({ storeName, notes, lines, author, amoenus }: NewOrderRequest): Promise<Order> {
     const orderLines = await this.buildLines(lines)
     const year = currentYear()
     const number = formatOrderNumber(year, await nextSequence(`order-${year}`))
@@ -156,57 +166,51 @@ export class OrderService {
   }
 
   /**
-   * Aprueba el pedido con las cantidades confirmadas. Las líneas que no se indican se sirven
-   * tal cual se pidieron; si alguna cambia, el pedido queda «modificado por obrador» y hay que
-   * indicar el motivo (la tienda lo ve, como el de un rechazo).
+   * Aprueba el pedido con las cantidades que sirve el obrador. Las líneas del pedido que no se
+   * indican se sirven tal cual se pidieron; las de artículos que no estaban en el pedido se añaden
+   * al final (pedido 0) y tienen que servirse. El comentario es opcional: la tienda lo ve en el
+   * historial, y los cambios se ven por línea (pedido frente a servido).
    */
-  async approve(id: string, data: ApproveOrderInput, user: AuthUser): Promise<Order> {
+  async approve(id: string, data: ApproveOrderData, user: AuthUser): Promise<Order> {
     const order = await this.getById(id, user)
     this.ensureCanTransition(order, 'approved')
 
+    const inOrder = new Set(order.lines.map((line) => line.saleArticleId))
     const confirmed = new Map((data.lines ?? []).map((line) => [line.saleArticleId, line]))
-    const issues: ValidationIssue[] = []
-    data.lines?.forEach((line, index) => {
-      if (!order.lines.some((orderLine) => orderLine.saleArticleId === line.saleArticleId)) {
-        issues.push({
-          path: `/lines/${index}/saleArticleId`,
-          message: 'El artículo no está en el pedido',
-        })
-      }
-    })
-    if (issues.length > 0) throw new ValidationError('Hay líneas que no son del pedido', issues)
+    const added = (data.lines ?? [])
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => !inOrder.has(line.saleArticleId))
 
-    const lines: OrderLine[] = order.lines.map((line) => {
-      const input = confirmed.get(line.saleArticleId)
-      const confirmedQty = input?.confirmedQty ?? line.requestedQty
-      // Lo que no se sirve no lleva lote ni caducidad.
-      const served = confirmedQty > 0
-      return {
-        ...line,
-        confirmedQty,
-        lotNumber: served ? (input?.lotNumber ?? null) : null,
-        expiryDate: served ? (input?.expiryDate ?? null) : null,
-      }
-    })
+    const issues: ValidationIssue[] = added
+      .filter(({ line }) => line.confirmedQty === 0)
+      .map(({ index }) => ({
+        path: `/lines/${index}/confirmedQty`,
+        message: 'Un artículo añadido tiene que servirse',
+      }))
+    if (issues.length > 0) throw new ValidationError('Hay artículos añadidos sin cantidad', issues)
+
+    const existingLines = order.lines.map((line) =>
+      withServed(line, confirmed.get(line.saleArticleId)),
+    )
+    const addedLines = (
+      await this.buildLines(
+        added.map(({ line }) => ({ saleArticleId: line.saleArticleId, quantity: 0 })),
+        added.map(({ index }) => index),
+      )
+    ).map((line) => withServed(line, confirmed.get(line.saleArticleId)))
+    const lines = [...existingLines, ...addedLines]
     if (lines.every((line) => line.confirmedQty === 0)) {
       throw new ValidationError('Para no servir ningún artículo, rechaza el pedido')
     }
 
-    const modified = lines.some((line) => line.confirmedQty !== line.requestedQty)
-    if (modified && !data.reason) {
-      const message = 'Indica el motivo de los cambios'
-      throw new ValidationError(message, [{ path: '/reason', message }])
-    }
     // El albarán se emite con la aprobación, en la misma escritura; el documento se genera a
     // continuación y, si eso se interrumpe, cuando vuelva a hacer falta (`ensureForOrder`).
     const deliveryNote = await this.deliveryNotes.reserve()
-    const approved = modified
-      ? await this.applyTransition(order, 'modified', user, {
-          lines,
-          reason: data.reason,
-          deliveryNote,
-        })
-      : await this.applyTransition(order, 'approved', user, { lines, deliveryNote })
+    const approved = await this.applyTransition(order, 'approved', user, {
+      lines,
+      reason: data.reason,
+      deliveryNote,
+    })
     await this.deliveryNotes.ensureForOrder(approved)
     return this.resolved(approved)
   }
@@ -271,8 +275,15 @@ export class OrderService {
     return user.role === 'store' ? (user.storeName ?? '') : undefined
   }
 
-  /** Comprueba que todos los artículos existen y están activos, y copia sus datos en la línea. */
-  private async buildLines(requested: CreateOrderData['lines']): Promise<OrderLine[]> {
+  /**
+   * Comprueba que todos los artículos existen y están activos, y copia sus datos en la línea.
+   * `positions` = posición de cada línea en la petición, para señalar el error (por defecto, la suya).
+   */
+  private async buildLines(
+    requested: CreateOrderData['lines'],
+    positions: number[] = requested.map((_, index) => index),
+  ): Promise<OrderLine[]> {
+    if (requested.length === 0) return []
     const articles = await this.saleArticles.findByIds(requested.map((line) => line.saleArticleId))
     const byId = new Map(articles.map((article) => [article.id, article]))
 
@@ -280,7 +291,7 @@ export class OrderService {
     const lines: OrderLine[] = []
     requested.forEach((line, index) => {
       const article = byId.get(line.saleArticleId)
-      const path = `/lines/${index}/saleArticleId`
+      const path = `/lines/${positions[index]}/saleArticleId`
       if (!article) {
         issues.push({ path, message: 'El artículo no existe' })
       } else if (!article.active) {

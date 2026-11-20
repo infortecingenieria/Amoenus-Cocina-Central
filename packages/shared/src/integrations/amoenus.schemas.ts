@@ -62,6 +62,7 @@ export const amoenusDeliveryNoteSchema = z.object({
     z.object({
       code: z.string(),
       name: z.string(),
+      /** 0 = artículo añadido por el obrador al aprobar (no estaba en el pedido). */
       requestedQty: z.number().int(),
       deliveredQty: z.number().int(),
       unitPrice: z.number(),

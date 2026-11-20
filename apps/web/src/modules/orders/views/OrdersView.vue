@@ -51,8 +51,8 @@ const columns = computed(() => (isKitchenAdmin.value ? 6 : 5))
 
 const search = ref('')
 const debouncedSearch = refDebounced(search, 300)
-// El obrador entra directamente a lo que tiene pendiente de validar; la tienda ve todo.
-const statuses = ref<OrderStatus[]>(session.isKitchenAdmin ? ['pending'] : [])
+// Todos ven todos los pedidos, los más nuevos primero; el filtro es para acotar.
+const statuses = ref<OrderStatus[]>([])
 const sort = ref<OrderSort>('-createdAt')
 const page = ref(1)
 

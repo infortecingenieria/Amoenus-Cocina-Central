@@ -60,13 +60,7 @@ export const AMOENUS_SYNC_EVENTS = ['delivery_note', 'rejection', 'store_order']
 export type AmoenusSyncEvent = (typeof AMOENUS_SYNC_EVENTS)[number]
 
 /** Aprobado y todo lo que viene después: el albarán sigue pendiente de enviar aunque avance. */
-const APPROVED_STATUSES: readonly OrderStatus[] = [
-  'approved',
-  'modified',
-  'in_preparation',
-  'shipped',
-  'delivered',
-]
+const APPROVED_STATUSES: readonly OrderStatus[] = ['approved', 'shipped']
 
 /**
  * Estados en los que un pedido tiene algo que comunicar a Amoenus, según su origen. El de una tienda
@@ -83,7 +77,10 @@ interface AmoenusLinkedOrder {
 }
 
 /** Lo que hay que comunicar a Amoenus del pedido en su estado actual; null si nada. */
-export const amoenusEventFor = ({ status, amoenus }: AmoenusLinkedOrder): AmoenusSyncEvent | null => {
+export const amoenusEventFor = ({
+  status,
+  amoenus,
+}: AmoenusLinkedOrder): AmoenusSyncEvent | null => {
   if (!amoenus || !AMOENUS_SYNCED_STATUSES[amoenus.origin].includes(status)) return null
   if (amoenus.origin === 'linked_store') return 'store_order'
   return status === 'rejected' ? 'rejection' : 'delivery_note'

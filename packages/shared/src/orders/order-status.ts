@@ -3,45 +3,38 @@ import { z } from 'zod'
 /**
  * Ciclo de vida de un pedido de tienda al obrador.
  *
- *   pending ──► approved ──┬──────────────────────► shipped ──► delivered
- *      │    └─► modified ──┴─► in_preparation ───┘
+ *   pending ──► approved ──► shipped
  *      ├─► rejected
  *      └─► cancelled
  *
- * `modified` = aprobado por el obrador con cantidades distintas a las solicitadas.
+ * `approved` = aprobado por el obrador, con las cantidades que sirve (pueden ser distintas de las
+ * solicitadas, o con artículos añadidos: se ve por línea).
  * `shipped` = el obrador ha enviado el pedido a la tienda: es su venta (ticket en Amoenus).
+ * `rejected` y `cancelled` son cierres: el pedido no se sirve.
  */
-export const ORDER_STATUSES = [
-  'pending',
-  'approved',
-  'modified',
-  'in_preparation',
-  'shipped',
-  'delivered',
-  'rejected',
-  'cancelled',
-] as const
+export const ORDER_STATUSES = ['pending', 'approved', 'shipped', 'rejected', 'cancelled'] as const
 export const orderStatusSchema = z.enum(ORDER_STATUSES)
 export type OrderStatus = z.infer<typeof orderStatusSchema>
+
+/** Los estados del flujo normal; `rejected` y `cancelled` son cierres poco frecuentes. */
+export const MAIN_ORDER_STATUSES = [
+  'pending',
+  'approved',
+  'shipped',
+] as const satisfies readonly OrderStatus[]
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'Pendiente',
   approved: 'Aprobado',
-  modified: 'Modificado por obrador',
-  in_preparation: 'En preparación',
   shipped: 'Enviado',
-  delivered: 'Entregado',
   rejected: 'Rechazado',
   cancelled: 'Cancelado',
 }
 
 export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  pending: ['approved', 'modified', 'rejected', 'cancelled'],
-  approved: ['in_preparation', 'shipped'],
-  modified: ['in_preparation', 'shipped'],
-  in_preparation: ['shipped'],
-  shipped: ['delivered'],
-  delivered: [],
+  pending: ['approved', 'rejected', 'cancelled'],
+  approved: ['shipped'],
+  shipped: [],
   rejected: [],
   cancelled: [],
 }

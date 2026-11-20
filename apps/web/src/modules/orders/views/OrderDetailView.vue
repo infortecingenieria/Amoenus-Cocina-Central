@@ -11,13 +11,17 @@ import {
   type AmoenusSync,
   type AmoenusSyncEvent,
   type Order,
+  type OrderLine,
+  type SaleArticle,
 } from '@cocina-central/shared'
 import {
   ArrowLeftIcon,
   CheckIcon,
   CircleXIcon,
   Loader2Icon,
+  PlusIcon,
   RefreshCwIcon,
+  Trash2Icon,
   TruckIcon,
   XIcon,
 } from '@lucide/vue'
@@ -36,6 +40,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -56,6 +68,7 @@ import ApproveOrderDialog from '../components/ApproveOrderDialog.vue'
 import OrderQuantityField from '../components/OrderQuantityField.vue'
 import OrderStatusBadge from '../components/OrderStatusBadge.vue'
 import RejectOrderDialog from '../components/RejectOrderDialog.vue'
+import SaleArticlePicker from '../components/SaleArticlePicker.vue'
 import ShipOrderDialog from '../components/ShipOrderDialog.vue'
 import {
   isSendingSale,
@@ -94,9 +107,12 @@ const confirmed = ref<Record<string, number>>({})
 // Nº de lote y caducidad por artículo, opcionales, tal y como se escriben ('' = sin indicar).
 type Traceability = { lotNumber: string; expiryDate: string }
 const traceability = ref<Record<string, Traceability>>({})
+// Artículos que añade el obrador al aprobar: no estaban en el pedido (pedido 0).
+const added = ref<OrderLine[]>([])
 watch(
   () => [order.value?.id, order.value?.status] as const,
   () => {
+    added.value = []
     const orderLines = order.value?.lines ?? []
     confirmed.value = Object.fromEntries(
       orderLines.map((line) => [line.saleArticleId, line.confirmedQty ?? line.requestedQty]),
@@ -116,9 +132,37 @@ function setTraceability(saleArticleId: string, field: keyof Traceability, value
   traceability.value[saleArticleId] = { ...current, [field]: String(value) }
 }
 
+const addingArticles = ref(false)
+
+function addArticle(article: SaleArticle) {
+  added.value.push({
+    saleArticleId: article.id,
+    code: article.code,
+    name: article.name,
+    format: article.format,
+    unitsPerFormat: article.unitsPerFormat,
+    unitPrice: article.price,
+    requestedQty: 0,
+    confirmedQty: 1,
+    lotNumber: null,
+    expiryDate: null,
+  })
+  confirmed.value[article.id] = 1
+  traceability.value[article.id] = { lotNumber: '', expiryDate: '' }
+}
+
+function removeAdded(saleArticleId: string) {
+  added.value = added.value.filter((line) => line.saleArticleId !== saleArticleId)
+  delete confirmed.value[saleArticleId]
+  delete traceability.value[saleArticleId]
+}
+
+/** Artículo que no estaba en el pedido: lo añadió el obrador al aprobar. */
+const isAddedLine = (line: Pick<OrderLine, 'requestedQty'>) => line.requestedQty === 0
+
 /** Líneas con lo que se mostrará: lo que se está ajustando o lo ya confirmado. */
 const lines = computed(() =>
-  (order.value?.lines ?? []).map((line) => {
+  [...(order.value?.lines ?? []), ...(canValidate.value ? added.value : [])].map((line) => {
     if (!canValidate.value) return line
     const confirmedQty = confirmed.value[line.saleArticleId] ?? line.requestedQty
     const tracked = traceability.value[line.saleArticleId]
@@ -148,16 +192,21 @@ const hasChanges = computed(() =>
 )
 const servesNothing = computed(() => lines.value.every((line) => line.confirmedQty === 0))
 
-/** Motivo del rechazo o de los cambios del obrador, para que la tienda lo vea destacado. */
+/** Motivo del rechazo o comentario del obrador al aprobar, para que la tienda lo vea destacado. */
 const statusNote = computed(() => {
-  const status = order.value?.status
-  if (status !== 'rejected' && status !== 'modified') return undefined
-  const entry = order.value?.statusHistory.at(-1)
+  const current = order.value
+  if (!current || current.status === 'pending' || current.status === 'cancelled') return undefined
+  const rejected = current.status === 'rejected'
+  const entry = [...current.statusHistory]
+    .reverse()
+    .find((item) => item.status === (rejected ? 'rejected' : 'approved'))
   if (!entry?.reason) return undefined
   return {
-    title: `${status === 'rejected' ? 'Rechazado' : 'Modificado'} por ${entry.userName}`,
+    title: rejected
+      ? `Rechazado por ${entry.userName}`
+      : `Comentario de ${entry.userName} al aprobar`,
     reason: entry.reason,
-    rejected: status === 'rejected',
+    rejected,
   }
 })
 
@@ -400,10 +449,16 @@ async function resendSaleToAmoenus(current: Order) {
         </div>
       </dl>
 
-      <p v-if="canValidate" class="text-sm text-muted-foreground">
-        Ajusta en «Servir» las cantidades si no se puede servir todo lo pedido (0 = no se sirve). El
-        lote y la caducidad son opcionales.
-      </p>
+      <div v-if="canValidate" class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm text-muted-foreground">
+          Ajusta en «Servir» las cantidades si no se puede servir todo lo pedido (0 = no se sirve) o
+          añade artículos que no estaban en el pedido. El lote y la caducidad son opcionales.
+        </p>
+        <Button variant="outline" @click="addingArticles = true">
+          <PlusIcon />
+          Añadir artículo
+        </Button>
+      </div>
 
       <div class="overflow-x-auto rounded-xl border">
         <Table>
@@ -436,17 +491,36 @@ async function resendSaleToAmoenus(current: Order) {
               <TableCell class="text-right tabular-nums">{{
                 formatCurrency(line.unitPrice)
               }}</TableCell>
-              <TableCell class="text-right tabular-nums">{{ line.requestedQty }}</TableCell>
+              <!-- 0 = no lo pidió la tienda: lo ha añadido el obrador. -->
+              <TableCell
+                class="text-right tabular-nums"
+                :title="
+                  isAddedLine(line) ? 'No estaba en el pedido: lo ha añadido el obrador' : undefined
+                "
+              >
+                {{ line.requestedQty }}
+              </TableCell>
               <TableCell v-if="showConfirmedColumn" :class="cn(!canValidate && 'text-right')">
-                <OrderQuantityField
-                  v-if="canValidate"
-                  :model-value="line.confirmedQty ?? line.requestedQty"
-                  @update:model-value="(value: number) => (confirmed[line.saleArticleId] = value)"
-                  :label="`Cantidad a servir de ${line.name}`"
-                  :class="
-                    cn(line.confirmedQty !== line.requestedQty && '[&_input]:border-teal-500')
-                  "
-                />
+                <div v-if="canValidate" class="flex items-center gap-1">
+                  <OrderQuantityField
+                    :model-value="line.confirmedQty ?? line.requestedQty"
+                    @update:model-value="(value: number) => (confirmed[line.saleArticleId] = value)"
+                    :min="isAddedLine(line) ? 1 : 0"
+                    :label="`Cantidad a servir de ${line.name}`"
+                    :class="
+                      cn(line.confirmedQty !== line.requestedQty && '[&_input]:border-teal-500')
+                    "
+                  />
+                  <Button
+                    v-if="isAddedLine(line)"
+                    variant="ghost"
+                    size="icon-sm"
+                    :aria-label="`Quitar ${line.name}`"
+                    @click="removeAdded(line.saleArticleId)"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
                 <span
                   v-else
                   :class="
@@ -531,6 +605,40 @@ async function resendSaleToAmoenus(current: Order) {
       </div>
 
       <ApproveOrderDialog v-model:open="approving" :order="order" :lines="lines" />
+
+      <Dialog v-if="canValidate" v-model:open="addingArticles">
+        <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Añadir artículos al pedido {{ order.number }}</DialogTitle>
+            <DialogDescription>
+              Se servirán a {{ order.storeName }} aunque no los haya pedido. La cantidad se ajusta
+              en la tabla del pedido.
+            </DialogDescription>
+          </DialogHeader>
+          <SaleArticlePicker
+            :selected-ids="lines.map((line) => line.saleArticleId)"
+            :page-size="12"
+            grid-class="sm:grid-cols-2"
+          >
+            <template #action="{ article, selected }">
+              <Button
+                variant="outline"
+                size="sm"
+                class="w-32"
+                :disabled="selected"
+                @click="addArticle(article)"
+              >
+                <CheckIcon v-if="selected" />
+                <PlusIcon v-else />
+                {{ selected ? 'En el pedido' : 'Añadir' }}
+              </Button>
+            </template>
+          </SaleArticlePicker>
+          <DialogFooter>
+            <Button @click="addingArticles = false">Hecho</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <RejectOrderDialog v-model:open="rejecting" :order="order" />
       <ShipOrderDialog v-model:open="shipping" :order="order" />
 

@@ -64,8 +64,8 @@ async function submit() {
       lotNumber: line.lotNumber,
       expiryDate: line.expiryDate,
     })),
-    // Sin cambios no hay motivo; con cambios es obligatorio (la API también lo exige).
-    reason: hasChanges.value ? reason.value : undefined,
+    // Opcional, haya cambios o no.
+    reason: reason.value,
   })
   if (!parsed.success) {
     errors.value = z.flattenError(parsed.error).fieldErrors.reason
@@ -97,15 +97,14 @@ async function submit() {
         <DialogDescription>
           {{
             hasChanges
-              ? `${order.storeName} recibirá las cantidades ajustadas y verá el motivo en el detalle del pedido.`
+              ? `${order.storeName} recibirá las cantidades ajustadas y los artículos añadidos.`
               : `Se servirán a ${order.storeName} las cantidades pedidas.`
           }}
         </DialogDescription>
       </DialogHeader>
 
-      <!-- Solo con cambios: sin ellos el diálogo es una simple confirmación. -->
-      <form v-if="hasChanges" novalidate class="flex flex-col gap-4" @submit.prevent="submit">
-        <ul class="flex flex-col gap-1 rounded-lg border bg-muted/40 p-3 text-sm">
+      <form novalidate class="flex flex-col gap-4" @submit.prevent="submit">
+        <ul v-if="hasChanges" class="flex flex-col gap-1 rounded-lg border bg-muted/40 p-3 text-sm">
           <li
             v-for="line in changes"
             :key="line.saleArticleId"
@@ -113,7 +112,9 @@ async function submit() {
           >
             <span class="truncate">{{ line.name }}</span>
             <span class="flex shrink-0 items-center gap-1 tabular-nums">
-              <span class="text-muted-foreground line-through">{{ line.requestedQty }}</span>
+              <!-- Pedido 0 = artículo que añade el obrador. -->
+              <span v-if="line.requestedQty === 0" class="text-muted-foreground">nuevo</span>
+              <span v-else class="text-muted-foreground line-through">{{ line.requestedQty }}</span>
               <ArrowRightIcon class="size-3.5 text-muted-foreground" />
               <span class="font-semibold">{{ line.confirmedQty }}</span>
             </span>
@@ -121,7 +122,7 @@ async function submit() {
         </ul>
 
         <Field :data-invalid="!!errors">
-          <FieldLabel for="approve-reason">Motivo de los cambios</FieldLabel>
+          <FieldLabel for="approve-reason">Comentario (opcional)</FieldLabel>
           <Textarea
             id="approve-reason"
             v-model="reason"

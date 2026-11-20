@@ -83,8 +83,9 @@ sale_articles (artículos de venta del obrador)        ✅ implementado
 orders (pedidos tienda → obrador)                    ✅ implementado
   _id, number ("PED-2026-0001", correlativo por año), storeName, status, notes,
   lines: [{ saleArticleId, code, name, format, unitsPerFormat,   ← copia del artículo al pedir
-            unitPrice, requestedQty, confirmedQty }],            ← confirmedQty: null hasta aprobar
-  statusHistory: [{ status, at, userId, userName, reason }],     ← motivo de rechazo, auditoría
+            unitPrice, requestedQty, confirmedQty }],            ← confirmedQty: null hasta aprobar;
+                                                                   requestedQty 0 = añadido por el obrador
+  statusHistory: [{ status, at, userId, userName, reason }],     ← motivo de rechazo o comentario al aprobar
   createdBy: { id, displayName }, createdAt, updatedAt
   ← cuando exista `stores`, storeName pasará a ser storeId
   Sin fecha de entrega: el listado muestra y ordena por `createdAt`.
@@ -104,21 +105,27 @@ histórico y los albaranes no cambien si luego se modifica el catálogo.
 Definido en `packages/shared/src/orders/order-status.ts`:
 
 ```
-pending ──► approved ──┬──────────────────────► shipped ──► delivered
-   │    └─► modified ──┴─► in_preparation ───┘
+pending ──► approved ──► shipped
    ├─► rejected   (obrador, con motivo)
    └─► cancelled  (tienda)
 ```
 
+- Tres estados en el flujo normal: Pendiente, Aprobado y Enviado (`MAIN_ORDER_STATUSES`).
+  Rechazado y Cancelado son cierres poco frecuentes. Solicitudes muestra por defecto todos los
+  estados; el filtro solo ofrece los tres principales (los cierres se ven con «Ver todos los estados»).
 - Solo la tienda (`store`) crea pedidos y solo ve los de su tienda; puede cancelarlos mientras están
   `pending`. El obrador (`kitchen_admin`) ve todos y los aprueba o rechaza (motivo obligatorio).
-- `modified` = aprobado con cantidades distintas a las pedidas (rotura de stock, mermas, capacidad
-  de horneada). Al aprobar, las líneas que no se indican se sirven tal cual se pidieron.
-- Aprobar con cambios exige motivo, igual que rechazar; se guarda en `statusHistory` y la tienda lo
-  ve destacado en la ficha del pedido. En la web, aprobar y rechazar siempre piden confirmación.
+- Al aprobar, el obrador puede servir otras cantidades (rotura de stock, mermas, capacidad de
+  horneada) y **añadir artículos** que no estaban en el pedido: van al final con `requestedQty: 0`.
+  Las líneas que no se indican se sirven tal cual se pidieron. El pedido queda `approved` igualmente;
+  los cambios se ven por línea (pedido frente a servido).
+- El comentario al aprobar es opcional, haya cambios o no; se guarda en `statusHistory` y la tienda
+  lo ve destacado en la ficha. En la web, aprobar y rechazar siempre piden confirmación.
 - `shipped` («Enviado»): el obrador marca que el pedido aprobado ha salido hacia la tienda, con lo
   aprobado. Es su venta y dispara el ticket en Amoenus (ver `docs/integracion-amoenus-central.md`).
-  Pide confirmación y no se puede deshacer. `in_preparation` y `delivered` aún no se usan.
+  Pide confirmación y no se puede deshacer.
+- Los estados antiguos (`modified`, `in_preparation`, `delivered`) se pasan a los actuales con
+  `pnpm db:migrate-order-statuses` (idempotente; hay que lanzarlo en cada entorno al desplegar).
 - Los cambios de estado se hacen con `findOneAndUpdate` filtrando por el estado de origen: si dos
   personas validan a la vez, la segunda recibe 409 `INVALID_STATE` en lugar de pisar el cambio.
 - Un artículo que ya aparece en algún pedido no se puede borrar (solo desactivar).
