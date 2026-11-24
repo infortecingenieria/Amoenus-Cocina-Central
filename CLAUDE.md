@@ -37,10 +37,13 @@ máquina, reglas propias) va en `CLAUDE.local.md`, que está en `.gitignore`.
   (`AmoenusCatalogService`); en Amoenus lo recibe `sale_loader/cocinaCentral` (rama
   `obradores-cocina-central`). Decisiones de negocio pendientes en la integración.
   Pendiente: si el login pasa a ser contra Amoenus (ver `docs/integracion-amoenus-central.md`).
-- Pedidos (`orders`): pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (filtro
-  multiestado, orden por fecha de creación, Aprobar/Editar/Enviado por fila) y ficha con aprobación
-  (ajustando cantidades → `modified`; Nº de lote y caducidad opcionales por artículo, que pasan al
-  albarán pero no a Amoenus), «Marcar como enviado», rechazo con motivo y cancelación por la tienda.
+- Pedidos (`orders`): estados Pendiente → Aprobado → Enviado, más los cierres Rechazado y Cancelado
+  (`pnpm db:migrate-order-statuses` pasa los antiguos `modified`/`in_preparation`/`delivered`).
+  Pantalla Nuevo Pedido (tienda, sin fecha de entrega), Solicitudes (todos los estados por defecto,
+  filtro multiestado, orden por fecha de creación, Aprobar/Editar/Enviado por fila) y ficha con
+  aprobación (ajustando cantidades y añadiendo artículos, con pedido 0; comentario opcional; Nº de
+  lote y caducidad opcionales por artículo, que pasan al albarán pero no a Amoenus), «Marcar como
+  enviado», rechazo con motivo y cancelación por la tienda.
   Sin módulo `stores` aún:
   el pedido guarda el `storeName` del usuario.
 - Descartado: las pantallas Historial, Entregas e Incidencias no forman parte de la aplicación.

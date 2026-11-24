@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ORDER_STATUS_LABELS, ORDER_STATUSES, type OrderStatus } from '@cocina-central/shared'
+import { MAIN_ORDER_STATUSES, ORDER_STATUS_LABELS, type OrderStatus } from '@cocina-central/shared'
 import { ChevronDownIcon, ListFilterIcon } from '@lucide/vue'
 import { computed } from 'vue'
 
@@ -13,7 +13,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-/** Estados seleccionados. Vacío = todos. */
+/**
+ * Estados seleccionados. Vacío = todos, también los cierres (rechazado y cancelado), que no tienen
+ * opción propia: se ven con «Ver todos los estados».
+ */
 const selected = defineModel<OrderStatus[]>({ required: true })
 
 const label = computed(() => {
@@ -24,7 +27,7 @@ const label = computed(() => {
 
 function toggle(status: OrderStatus, checked: boolean) {
   // Se mantiene el orden del ciclo de vida, no el de selección.
-  selected.value = ORDER_STATUSES.filter((option) =>
+  selected.value = MAIN_ORDER_STATUSES.filter((option) =>
     option === status ? checked : selected.value.includes(option),
   )
 }
@@ -50,7 +53,7 @@ const keepOpen = (event: Event) => event.preventDefault()
     </DropdownMenuTrigger>
     <DropdownMenuContent class="w-56">
       <DropdownMenuCheckboxItem
-        v-for="status in ORDER_STATUSES"
+        v-for="status in MAIN_ORDER_STATUSES"
         :key="status"
         :model-value="selected.includes(status)"
         @update:model-value="

@@ -36,7 +36,8 @@ const deliveryNoteLineSchema = new Schema<DeliveryNoteLineRecord>(
     format: { type: String, enum: PACKAGE_FORMATS, required: true },
     unitsPerFormat: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
-    requestedQty: { type: Number, required: true, min: 1 },
+    // 0 = artículo añadido por el obrador al aprobar.
+    requestedQty: { type: Number, required: true, min: 0 },
     deliveredQty: { type: Number, required: true, min: 0 },
     lotNumber: { type: String, default: null },
     expiryDate: { type: String, default: null },

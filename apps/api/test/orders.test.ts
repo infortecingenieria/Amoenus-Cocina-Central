@@ -264,6 +264,9 @@ describe('API /orders', () => {
 
       const invalid = await asAdmin({ url: `${baseUrl}?status=pending,inventado` })
       expect(invalid.statusCode).toBe(400)
+      // Estados que ya no existen.
+      const legacy = await asAdmin({ url: `${baseUrl}?status=modified` })
+      expect(legacy.statusCode).toBe(400)
     })
 
     it('ordena por fecha de creación: por defecto los más nuevos primero', async () => {
@@ -312,7 +315,7 @@ describe('API /orders', () => {
       expect(approved.statusHistory.at(-1)?.reason).toBeNull()
     })
 
-    it('aprobar con otras cantidades deja el pedido modificado, con su motivo y el total recalculado', async () => {
+    it('aprobar con otras cantidades deja el pedido aprobado, con su comentario y el total recalculado', async () => {
       const order = await createOrder()
 
       const response = await asAdmin({
@@ -324,14 +327,121 @@ describe('API /orders', () => {
         },
       })
       expect(response.statusCode).toBe(200)
-      const modified = response.json<Order>()
-      expect(modified.status).toBe('modified')
-      expect(modified.lines.map((line) => line.confirmedQty)).toEqual([3, 0])
-      expect(modified.total).toBe(4.35)
-      expect(modified.statusHistory.at(-1)).toMatchObject({
-        status: 'modified',
+      const approved = response.json<Order>()
+      expect(approved.status).toBe('approved')
+      expect(approved.lines.map((line) => line.confirmedQty)).toEqual([3, 0])
+      expect(approved.total).toBe(4.35)
+      expect(approved.statusHistory.at(-1)).toMatchObject({
+        status: 'approved',
         reason: 'No quedan croissants',
       })
+    })
+
+    it('el comentario es opcional aunque cambien las cantidades', async () => {
+      for (const reason of [undefined, '   ']) {
+        const order = await createOrder()
+        const response = await asAdmin({
+          method: 'POST',
+          url: `${baseUrl}/${order.id}/approve`,
+          payload: { lines: [{ saleArticleId: articles.croissant.id, confirmedQty: 1 }], reason },
+        })
+        expect(response.statusCode).toBe(200)
+        const approved = response.json<Order>()
+        expect(approved.status).toBe('approved')
+        expect(approved.statusHistory.at(-1)?.reason).toBeNull()
+      }
+    })
+
+    it('añade al aprobar artículos que no estaban en el pedido, también al albarán', async () => {
+      const order = await createOrder({
+        lines: [{ saleArticleId: articles.barra.id, quantity: 3 }],
+      })
+
+      const response = await asAdmin({
+        method: 'POST',
+        url: `${baseUrl}/${order.id}/approve`,
+        payload: {
+          lines: [
+            { saleArticleId: articles.croissant.id, confirmedQty: 4, lotNumber: 'L-7' },
+            { saleArticleId: articles.barra.id, confirmedQty: 2 },
+          ],
+        },
+      })
+      expect(response.statusCode).toBe(200)
+      const approved = response.json<Order>()
+      expect(approved.status).toBe('approved')
+      // Las del pedido primero, en su orden; las añadidas al final, con pedido 0.
+      expect(approved.lines).toEqual([
+        expect.objectContaining({
+          saleArticleId: articles.barra.id,
+          requestedQty: 3,
+          confirmedQty: 2,
+        }),
+        {
+          saleArticleId: articles.croissant.id,
+          code: '20001',
+          name: 'Croissant Mantequilla',
+          format: 'box',
+          unitsPerFormat: 30,
+          unitPrice: 0.85,
+          requestedQty: 0,
+          confirmedQty: 4,
+          lotNumber: 'L-7',
+          expiryDate: null,
+        },
+      ])
+      expect(approved.total).toBe(6.3) // 2 × 1,45 + 4 × 0,85
+
+      const deliveryNote = await DeliveryNoteModel.findOne({ orderId: order.id }).lean()
+      expect(
+        deliveryNote?.lines.map(({ code, requestedQty, deliveredQty }) => ({
+          code,
+          requestedQty,
+          deliveredQty,
+        })),
+      ).toEqual([
+        { code: '10001', requestedQty: 3, deliveredQty: 2 },
+        { code: '20001', requestedQty: 0, deliveredQty: 4 },
+      ])
+    })
+
+    it('no añade artículos que no existen, inactivos o sin cantidad', async () => {
+      const order = await createOrder({
+        lines: [{ saleArticleId: articles.barra.id, quantity: 3 }],
+      })
+      const inactive = await createArticle({ ...croissant, code: '30001', name: 'Napolitana' })
+      await asAdmin({
+        method: 'PATCH',
+        url: `/api/v1/sale-articles/${inactive.id}`,
+        payload: { active: false },
+      })
+      const url = `${baseUrl}/${order.id}/approve`
+
+      const unknown = await asAdmin({
+        method: 'POST',
+        url,
+        payload: { lines: [{ saleArticleId: '64b7f0c2a1b2c3d4e5f6aaaa', confirmedQty: 1 }] },
+      })
+      expect(unknown.statusCode).toBe(400)
+      expect(unknown.json<ApiErrorBody>().code).toBe('VALIDATION_ERROR')
+
+      const notActive = await asAdmin({
+        method: 'POST',
+        url,
+        payload: { lines: [{ saleArticleId: inactive.id, confirmedQty: 1 }] },
+      })
+      expect(notActive.statusCode).toBe(400)
+
+      const withoutQuantity = await asAdmin({
+        method: 'POST',
+        url,
+        payload: { lines: [{ saleArticleId: articles.croissant.id, confirmedQty: 0 }] },
+      })
+      expect(withoutQuantity.statusCode).toBe(400)
+
+      const stored = (await asAdmin({ url: `${baseUrl}/${order.id}` })).json<Order>()
+      expect(stored.status).toBe('pending')
+      expect(stored.lines).toHaveLength(1)
     })
 
     it('guarda el lote y la caducidad que indique el obrador, también en el albarán', async () => {
@@ -356,13 +466,18 @@ describe('API /orders', () => {
       const approved = response.json<Order>()
       // Lote y caducidad no cuentan como cambios: sigue siendo una aprobación sin más.
       expect(approved.status).toBe('approved')
-      expect(approved.lines.map(({ lotNumber, expiryDate }) => ({ lotNumber, expiryDate }))).toEqual([
+      expect(
+        approved.lines.map(({ lotNumber, expiryDate }) => ({ lotNumber, expiryDate })),
+      ).toEqual([
         { lotNumber: 'L-2410', expiryDate: '2026-11-03' },
         { lotNumber: null, expiryDate: null },
       ])
 
       const deliveryNote = await DeliveryNoteModel.findOne({ orderId: order.id }).lean()
-      expect(deliveryNote?.lines[0]).toMatchObject({ lotNumber: 'L-2410', expiryDate: '2026-11-03' })
+      expect(deliveryNote?.lines[0]).toMatchObject({
+        lotNumber: 'L-2410',
+        expiryDate: '2026-11-03',
+      })
     })
 
     it('lo que no se sirve no lleva lote ni caducidad', async () => {
@@ -384,7 +499,11 @@ describe('API /orders', () => {
           },
         })
       ).json<Order>()
-      expect(approved.lines[1]).toMatchObject({ confirmedQty: 0, lotNumber: null, expiryDate: null })
+      expect(approved.lines[1]).toMatchObject({
+        confirmedQty: 0,
+        lotNumber: null,
+        expiryDate: null,
+      })
     })
 
     it('rechaza una caducidad que no es una fecha', async () => {
@@ -399,22 +518,7 @@ describe('API /orders', () => {
       expect(response.statusCode).toBe(400)
     })
 
-    it('aprobar con cambios exige motivo', async () => {
-      const order = await createOrder()
-      const url = `${baseUrl}/${order.id}/approve`
-      const lines = [{ saleArticleId: articles.croissant.id, confirmedQty: 1 }]
-
-      for (const payload of [{ lines }, { lines, reason: '   ' }]) {
-        const response = await asAdmin({ method: 'POST', url, payload })
-        expect(response.statusCode).toBe(400)
-        expect(response.json<ApiErrorBody>().code).toBe('VALIDATION_ERROR')
-      }
-
-      const stored = (await asAdmin({ url: `${baseUrl}/${order.id}` })).json<Order>()
-      expect(stored.status).toBe('pending')
-    })
-
-    it('no aprueba sin servir nada ni con líneas que no son del pedido', async () => {
+    it('no aprueba sin servir nada', async () => {
       const order = await createOrder()
 
       const allZero = await asAdmin({
@@ -428,13 +532,6 @@ describe('API /orders', () => {
         },
       })
       expect(allZero.statusCode).toBe(400)
-
-      const unknown = await asAdmin({
-        method: 'POST',
-        url: `${baseUrl}/${order.id}/approve`,
-        payload: { lines: [{ saleArticleId: '64b7f0c2a1b2c3d4e5f6aaaa', confirmedQty: 1 }] },
-      })
-      expect(unknown.statusCode).toBe(400)
     })
 
     it('rechaza con motivo obligatorio', async () => {

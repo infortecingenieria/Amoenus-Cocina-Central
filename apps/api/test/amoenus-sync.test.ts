@@ -108,7 +108,7 @@ describe('Albaranes y envíos a Amoenus', () => {
 
       expect(response.statusCode).toBe(200)
       const approved = response.json<Order>()
-      expect(approved.status).toBe('modified')
+      expect(approved.status).toBe('approved')
       expect(approved.deliveryNote?.number).toMatch(/^ALB-\d{4}-0001$/)
     })
 
@@ -241,9 +241,9 @@ describe('Albaranes y envíos a Amoenus', () => {
           deliveryNote: expect.objectContaining({ number: approved.deliveryNote?.number }),
         }),
       ])
-      expect(await DeliveryNoteModel.countDocuments({ number: approved.deliveryNote?.number })).toBe(
-        1,
-      )
+      expect(
+        await DeliveryNoteModel.countDocuments({ number: approved.deliveryNote?.number }),
+      ).toBe(1)
     })
 
     it('no envía dos veces el mismo pedido aunque coincidan varios envíos', async () => {
@@ -337,6 +337,25 @@ describe('Albaranes y envíos a Amoenus', () => {
         localId: LOCAL_ID,
         sync: null,
       })
+    })
+
+    it('envía los artículos que añade el obrador con lo pedido a 0', async () => {
+      await linkStoreToAmoenus()
+      const order = (
+        await asStore({
+          method: 'POST',
+          url: '/api/v1/orders',
+          payload: { notes: null, lines: [{ saleArticleId: articles.barra.id, quantity: 3 }] },
+        })
+      ).json<Order>()
+      await approve(order.id, {
+        lines: [{ saleArticleId: articles.croissant.id, confirmedQty: 2 }],
+      })
+
+      expect(amoenus.storeOrders[0]?.deliveryNote.lines).toEqual([
+        expect.objectContaining({ code: '10001', requestedQty: 3, deliveredQty: 3 }),
+        expect.objectContaining({ code: '20001', requestedQty: 0, deliveredQty: 2 }),
+      ])
     })
 
     it('al aprobarlo envía a Amoenus el pedido con su albarán', async () => {

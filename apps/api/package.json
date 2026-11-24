@@ -10,6 +10,7 @@
     "start": "node dist/server.mjs",
     "db:seed": "tsx src/scripts/seed.ts",
     "db:import-articles": "tsx src/scripts/import-articles.ts",
+    "db:migrate-order-statuses": "tsx src/scripts/migrate-order-statuses.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --fix --cache",
     "test": "vitest run"

@@ -12,8 +12,15 @@ export const MAX_ORDER_LINE_QUANTITY = 9999
 
 const notesSchema = z.string().trim().max(500, 'Máximo 500 caracteres').nullable()
 
-/** Motivo de un rechazo o de una aprobación con cambios: la tienda lo ve en el pedido. */
+/** Motivo de un rechazo: la tienda lo ve en el pedido. */
 const reasonSchema = z.string().trim().min(1, 'Indica el motivo').max(500, 'Máximo 500 caracteres')
+
+/** Comentario opcional al aprobar (p. ej. por qué cambian las cantidades). Vacío = sin comentario. */
+const approvalCommentSchema = z
+  .string()
+  .trim()
+  .max(500, 'Máximo 500 caracteres')
+  .transform((value) => value || undefined)
 
 const quantitySchema = z
   .number()
@@ -59,6 +66,7 @@ export type CreateOrderData = z.output<typeof createOrderSchema>
 export const MAX_LOT_NUMBER_LENGTH = 50
 
 export const approveOrderLineSchema = z.object({
+  /** Un artículo del pedido o uno que añade el obrador (entonces debe servirse: cantidad > 0). */
   saleArticleId: objectIdSchema,
   /** Formatos que servirá el obrador. 0 = no se sirve esa línea. */
   confirmedQty: quantitySchema.min(0, 'La cantidad no puede ser negativa'),
@@ -75,14 +83,15 @@ export const approveOrderLineSchema = z.object({
 })
 
 /**
- * Las líneas que no se envían se aprueban con la cantidad pedida. Si alguna cantidad cambia, el
- * pedido queda `modified` en lugar de `approved` y el motivo es obligatorio.
+ * Las líneas del pedido que no se envían se aprueban con la cantidad pedida; las de artículos que no
+ * estaban en el pedido se añaden (pedido 0). El comentario es opcional, haya cambios o no.
  */
 export const approveOrderSchema = z.object({
   lines: z.array(approveOrderLineSchema).superRefine(uniqueArticles).optional(),
-  reason: reasonSchema.optional(),
+  reason: approvalCommentSchema.optional(),
 })
-export type ApproveOrderInput = z.infer<typeof approveOrderSchema>
+export type ApproveOrderInput = z.input<typeof approveOrderSchema>
+export type ApproveOrderData = z.output<typeof approveOrderSchema>
 
 export const rejectOrderSchema = z.object({
   reason: reasonSchema,
@@ -100,6 +109,7 @@ export const orderLineSchema = z.object({
   unitsPerFormat: z.number().int(),
   /** Precio por formato en el momento de pedir. */
   unitPrice: z.number(),
+  /** Formatos que pidió la tienda; 0 = artículo añadido por el obrador al aprobar. */
   requestedQty: z.number().int(),
   /** Cantidad que sirve el obrador; null mientras no se ha aprobado. */
   confirmedQty: z.number().int().nullable(),
@@ -165,7 +175,7 @@ export const ORDER_SORTS = ['-createdAt', 'createdAt'] as const
 export type OrderSort = (typeof ORDER_SORTS)[number]
 
 export const listOrdersQuerySchema = paginationQuerySchema.extend({
-  /** Uno o varios estados separados por comas: `?status=pending,modified`. */
+  /** Uno o varios estados separados por comas: `?status=pending,approved`. */
   status: z
     .string()
     .transform((value) => value.split(',').map((status) => status.trim()))
